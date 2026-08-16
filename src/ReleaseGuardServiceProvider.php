@@ -6,6 +6,7 @@ namespace Hopheartsceo\ReleaseGuard;
 
 use Hopheartsceo\ReleaseGuard\Compatibility\CompatibilityEngine;
 use Hopheartsceo\ReleaseGuard\Compatibility\Rules\DroppedColumnStillReferencedRule;
+use Hopheartsceo\ReleaseGuard\Compatibility\Rules\UnanalyzableMigrationOperationRule;
 use Hopheartsceo\ReleaseGuard\Console\CheckReleaseCompatibilityCommand;
 use Illuminate\Support\ServiceProvider;
 
@@ -25,6 +26,10 @@ final class ReleaseGuardServiceProvider extends ServiceProvider
 
                 if ((bool) $app['config']->get('release-guard.rules.DB001', true)) {
                     $rules[] = $app->make(DroppedColumnStillReferencedRule::class);
+                }
+
+                if ((bool) $app['config']->get('release-guard.rules.DB006', true)) {
+                    $rules[] = $app->make(UnanalyzableMigrationOperationRule::class);
                 }
 
                 return new CompatibilityEngine($rules);

@@ -13,9 +13,9 @@ final class Finding
         public readonly string $code,
         public readonly Severity $severity,
         public readonly Confidence $confidence,
-        public readonly string $table,
+        public readonly ?string $table,
         public readonly ?string $column,
-        public readonly DatabaseUsage $usage,
+        public readonly ?DatabaseUsage $usage,
         public readonly SchemaChange $change,
     ) {
     }
