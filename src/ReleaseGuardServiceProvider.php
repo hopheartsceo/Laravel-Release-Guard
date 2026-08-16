@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Hopheartsceo\ReleaseGuard;
 
+use Hopheartsceo\ReleaseGuard\Compatibility\CompatibilityEngine;
+use Hopheartsceo\ReleaseGuard\Compatibility\Rules\DroppedColumnStillReferencedRule;
 use Hopheartsceo\ReleaseGuard\Console\CheckReleaseCompatibilityCommand;
 use Illuminate\Support\ServiceProvider;
 
@@ -14,6 +16,19 @@ final class ReleaseGuardServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(
             __DIR__.'/../config/release-guard.php',
             'release-guard',
+        );
+
+        $this->app->singleton(
+            CompatibilityEngine::class,
+            function ($app): CompatibilityEngine {
+                $rules = [];
+
+                if ((bool) $app['config']->get('release-guard.rules.DB001', true)) {
+                    $rules[] = $app->make(DroppedColumnStillReferencedRule::class);
+                }
+
+                return new CompatibilityEngine($rules);
+            },
         );
     }
 
