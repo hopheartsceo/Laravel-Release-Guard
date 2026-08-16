@@ -8,6 +8,7 @@ use Hopheartsceo\ReleaseGuard\Compatibility\CompatibilityEngine;
 use Hopheartsceo\ReleaseGuard\Compatibility\Rules\DroppedColumnStillReferencedRule;
 use Hopheartsceo\ReleaseGuard\Compatibility\Rules\DroppedTableStillReferencedRule;
 use Hopheartsceo\ReleaseGuard\Compatibility\Rules\RenamedColumnStillReferencedRule;
+use Hopheartsceo\ReleaseGuard\Compatibility\Rules\RenamedTableStillReferencedRule;
 use Hopheartsceo\ReleaseGuard\Compatibility\Rules\RequiredColumnBreaksBaseWritesRule;
 use Hopheartsceo\ReleaseGuard\Compatibility\Rules\UnanalyzableMigrationOperationRule;
 use Hopheartsceo\ReleaseGuard\Console\CheckReleaseCompatibilityCommand;
@@ -37,6 +38,10 @@ final class ReleaseGuardServiceProvider extends ServiceProvider
 
                 if ((bool) $app['config']->get('release-guard.rules.DB003', true)) {
                     $rules[] = $app->make(DroppedTableStillReferencedRule::class);
+                }
+
+                if ((bool) $app['config']->get('release-guard.rules.DB004', true)) {
+                    $rules[] = $app->make(RenamedTableStillReferencedRule::class);
                 }
 
                 if ((bool) $app['config']->get('release-guard.rules.DB005', true)) {
