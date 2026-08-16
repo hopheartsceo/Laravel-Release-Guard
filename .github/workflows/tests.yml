@@ -1,0 +1,57 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - php: '8.1'
+            laravel: '10'
+            testbench: '^8.0'
+
+          - php: '8.2'
+            laravel: '11'
+            testbench: '^9.0'
+
+          - php: '8.4'
+            laravel: '12'
+            testbench: '^10.0'
+
+          - php: '8.3'
+            laravel: '13'
+            testbench: '^11.0'
+
+    name: PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate Composer
+        run: composer validate --strict
+
+      - name: Select Testbench
+        run: composer require --dev --no-update "orchestra/testbench:${{ matrix.testbench }}"
+
+      - name: Install dependencies
+        run: composer update --with-all-dependencies --prefer-dist --no-interaction --no-progress
+
+      - name: Check PHP syntax
+        run: find src config tests -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Run tests
+        run: composer test
