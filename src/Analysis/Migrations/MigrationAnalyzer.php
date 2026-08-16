@@ -6,6 +6,9 @@ namespace Hopheartsceo\ReleaseGuard\Analysis\Migrations;
 
 use Hopheartsceo\ReleaseGuard\Analysis\Ast\PhpAstParserService;
 use Hopheartsceo\ReleaseGuard\Domain\Schema\DroppedColumn;
+use Hopheartsceo\ReleaseGuard\Domain\Schema\DroppedTable;
+use Hopheartsceo\ReleaseGuard\Domain\Schema\RenamedColumn;
+use Hopheartsceo\ReleaseGuard\Domain\Schema\RenamedTable;
 use Hopheartsceo\ReleaseGuard\Domain\Schema\SchemaDelta;
 use Hopheartsceo\ReleaseGuard\Domain\Schema\UnanalyzableMigrationOperation;
 use PhpParser\Node\Expr\Closure;
@@ -44,37 +47,109 @@ final class MigrationAnalyzer
         );
 
         foreach ($schemaCalls as $schemaCall) {
-            if (! $this->isSchemaTableCall($schemaCall)) {
+            if ($this->isSchemaCall($schemaCall, 'table')) {
+                foreach ($this->analyzeSchemaTableCall($schemaCall, $file) as $change) {
+                    $changes[] = $change;
+                }
+
                 continue;
             }
 
-            $table = $this->literalStringArgument($schemaCall, 0);
-            $closure = $schemaCall->args[1]->value ?? null;
+            if (
+                $this->isSchemaCall($schemaCall, 'drop')
+                || $this->isSchemaCall($schemaCall, 'dropIfExists')
+            ) {
+                $operation = $this->isSchemaCall($schemaCall, 'dropIfExists')
+                    ? 'dropIfExists'
+                    : 'drop';
 
-            if (! $closure instanceof Closure) {
-                continue;
-            }
+                $table = $this->literalStringArgument($schemaCall, 0);
 
-            $blueprintVariable = $this->blueprintVariable($closure);
+                if ($table === null) {
+                    $changes[] = new UnanalyzableMigrationOperation(
+                        operation: $operation,
+                        table: null,
+                        column: null,
+                        reason: 'dynamic_table',
+                        file: $file,
+                        line: $schemaCall->getStartLine(),
+                    );
 
-            if ($blueprintVariable === null) {
-                continue;
-            }
-
-            $methodCalls = $this->finder->findInstanceOf(
-                $closure->stmts ?? [],
-                MethodCall::class,
-            );
-
-            foreach ($methodCalls as $methodCall) {
-                if (! $this->isMethodOnVariable(
-                    $methodCall,
-                    $blueprintVariable,
-                    'dropColumn',
-                )) {
                     continue;
                 }
 
+                $changes[] = new DroppedTable(
+                    table: $table,
+                    ifExists: $operation === 'dropIfExists',
+                    file: $file,
+                    line: $schemaCall->getStartLine(),
+                );
+
+                continue;
+            }
+
+            if ($this->isSchemaCall($schemaCall, 'rename')) {
+                $from = $this->literalStringArgument($schemaCall, 0);
+                $to = $this->literalStringArgument($schemaCall, 1);
+
+                if ($from === null || $to === null) {
+                    $changes[] = new UnanalyzableMigrationOperation(
+                        operation: 'rename',
+                        table: $from,
+                        column: null,
+                        reason: $this->renameTableUnknownReason($from, $to),
+                        file: $file,
+                        line: $schemaCall->getStartLine(),
+                    );
+
+                    continue;
+                }
+
+                $changes[] = new RenamedTable(
+                    from: $from,
+                    to: $to,
+                    file: $file,
+                    line: $schemaCall->getStartLine(),
+                );
+            }
+        }
+
+        return new SchemaDelta($changes);
+    }
+
+    /**
+     * @return list<DroppedColumn|RenamedColumn|UnanalyzableMigrationOperation>
+     */
+    private function analyzeSchemaTableCall(
+        StaticCall $schemaCall,
+        string $file,
+    ): array {
+        $changes = [];
+
+        $table = $this->literalStringArgument($schemaCall, 0);
+        $closure = $schemaCall->args[1]->value ?? null;
+
+        if (! $closure instanceof Closure) {
+            return [];
+        }
+
+        $blueprintVariable = $this->blueprintVariable($closure);
+
+        if ($blueprintVariable === null) {
+            return [];
+        }
+
+        $methodCalls = $this->finder->findInstanceOf(
+            $closure->stmts ?? [],
+            MethodCall::class,
+        );
+
+        foreach ($methodCalls as $methodCall) {
+            if ($this->isMethodOnVariable(
+                $methodCall,
+                $blueprintVariable,
+                'dropColumn',
+            )) {
                 $column = $this->literalStringArgument($methodCall, 0);
 
                 if ($table === null || $column === null) {
@@ -82,7 +157,7 @@ final class MigrationAnalyzer
                         operation: 'dropColumn',
                         table: $table,
                         column: $column,
-                        reason: $this->unknownReason($table, $column),
+                        reason: $this->dropColumnUnknownReason($table, $column),
                         file: $file,
                         line: $methodCall->getStartLine(),
                     );
@@ -96,14 +171,56 @@ final class MigrationAnalyzer
                     file: $file,
                     line: $methodCall->getStartLine(),
                 );
+
+                continue;
+            }
+
+            if ($this->isMethodOnVariable(
+                $methodCall,
+                $blueprintVariable,
+                'renameColumn',
+            )) {
+                $from = $this->literalStringArgument($methodCall, 0);
+                $to = $this->literalStringArgument($methodCall, 1);
+
+                if (
+                    $table === null
+                    || $from === null
+                    || $to === null
+                ) {
+                    $changes[] = new UnanalyzableMigrationOperation(
+                        operation: 'renameColumn',
+                        table: $table,
+                        column: $from,
+                        reason: $this->renameColumnUnknownReason(
+                            $table,
+                            $from,
+                            $to,
+                        ),
+                        file: $file,
+                        line: $methodCall->getStartLine(),
+                    );
+
+                    continue;
+                }
+
+                $changes[] = new RenamedColumn(
+                    table: $table,
+                    from: $from,
+                    to: $to,
+                    file: $file,
+                    line: $methodCall->getStartLine(),
+                );
             }
         }
 
-        return new SchemaDelta($changes);
+        return $changes;
     }
 
-    private function isSchemaTableCall(StaticCall $call): bool
-    {
+    private function isSchemaCall(
+        StaticCall $call,
+        string $method,
+    ): bool {
         if (
             ! $call->class instanceof Name
             || ! $call->name instanceof Identifier
@@ -112,7 +229,7 @@ final class MigrationAnalyzer
         }
 
         return $call->class->toString() === 'Illuminate\Support\Facades\Schema'
-            && $call->name->toString() === 'table';
+            && $call->name->toString() === $method;
     }
 
     private function blueprintVariable(Closure $closure): ?string
@@ -154,7 +271,7 @@ final class MigrationAnalyzer
         return $argument->value;
     }
 
-    private function unknownReason(
+    private function dropColumnUnknownReason(
         ?string $table,
         ?string $column,
     ): string {
@@ -167,5 +284,40 @@ final class MigrationAnalyzer
         }
 
         return 'dynamic_column';
+    }
+
+    private function renameColumnUnknownReason(
+        ?string $table,
+        ?string $from,
+        ?string $to,
+    ): string {
+        if ($table === null) {
+            return 'dynamic_table';
+        }
+
+        if ($from === null && $to === null) {
+            return 'dynamic_source_and_target_column';
+        }
+
+        if ($from === null) {
+            return 'dynamic_source_column';
+        }
+
+        return 'dynamic_target_column';
+    }
+
+    private function renameTableUnknownReason(
+        ?string $from,
+        ?string $to,
+    ): string {
+        if ($from === null && $to === null) {
+            return 'dynamic_source_and_target_table';
+        }
+
+        if ($from === null) {
+            return 'dynamic_source_table';
+        }
+
+        return 'dynamic_target_table';
     }
 }
