@@ -15,24 +15,28 @@ jobs:
           - php: '8.1'
             laravel: '10'
             testbench: '^8.0'
+            composer-flags: '--no-blocking'
 
           - php: '8.2'
             laravel: '11'
             testbench: '^9.0'
+            composer-flags: '--no-blocking'
 
           - php: '8.4'
             laravel: '12'
             testbench: '^10.0'
+            composer-flags: ''
 
           - php: '8.3'
             laravel: '13'
             testbench: '^11.0'
+            composer-flags: ''
 
     name: PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -48,7 +52,7 @@ jobs:
         run: composer require --dev --no-update "orchestra/testbench:${{ matrix.testbench }}"
 
       - name: Install dependencies
-        run: composer update --with-all-dependencies --prefer-dist --no-interaction --no-progress
+        run: composer update --with-all-dependencies --prefer-dist --no-interaction --no-progress ${{ matrix.composer-flags }}
 
       - name: Check PHP syntax
         run: find src config tests -name '*.php' -print0 | xargs -0 -n1 php -l
