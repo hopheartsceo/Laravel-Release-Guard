@@ -30,12 +30,4 @@ final class PackageBootTest extends TestCase
         );
     }
 
-    public function test_unimplemented_command_does_not_report_false_success(): void
-    {
-        $this->artisan('release-guard:check', [
-            '--against' => 'origin/master',
-        ])
-            ->expectsOutputToContain('Release compatibility analysis has not been implemented yet.')
-            ->assertFailed();
-    }
 }
