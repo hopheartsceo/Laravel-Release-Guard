@@ -7,6 +7,7 @@ namespace Hopheartsceo\ReleaseGuard\Analysis\Application;
 use Hopheartsceo\ReleaseGuard\Analysis\Ast\PhpAstParserService;
 use Hopheartsceo\ReleaseGuard\Domain\Application\ApplicationSnapshot;
 use Hopheartsceo\ReleaseGuard\Domain\Application\ColumnUsage;
+use Hopheartsceo\ReleaseGuard\Domain\Application\TableUsage;
 use Hopheartsceo\ReleaseGuard\Domain\Application\WriteUsage;
 use PhpParser\Node\ArrayItem;
 use PhpParser\Node\Expr\Array_;
@@ -71,6 +72,19 @@ final class DatabaseUsageAnalyzer
                     call: $methodCall,
                     file: $file,
                 ) as $usage) {
+                    $usages[] = $usage;
+                }
+
+                continue;
+            }
+
+            if ($this->isNamedMethod($methodCall, 'get')) {
+                $usage = $this->analyzeGet(
+                    call: $methodCall,
+                    file: $file,
+                );
+
+                if ($usage !== null) {
                     $usages[] = $usage;
                 }
             }
@@ -168,6 +182,46 @@ final class DatabaseUsageAnalyzer
         }
 
         return $usages;
+    }
+
+    private function analyzeGet(
+        MethodCall $call,
+        string $file,
+    ): ?TableUsage {
+        if ($this->hasSpecificUsageInChain($call)) {
+            return null;
+        }
+
+        $table = $this->queryBuilderTable($call);
+
+        if ($table === null) {
+            return null;
+        }
+
+        return new TableUsage(
+            table: $table,
+            operation: 'get',
+            file: $file,
+            line: $call->getStartLine(),
+        );
+    }
+
+    private function hasSpecificUsageInChain(MethodCall $call): bool
+    {
+        $current = $call->var;
+
+        while ($current instanceof MethodCall) {
+            if (
+                $this->isNamedMethod($current, 'where')
+                || $this->isNamedMethod($current, 'select')
+            ) {
+                return true;
+            }
+
+            $current = $current->var;
+        }
+
+        return false;
     }
 
     private function queryBuilderTable(MethodCall $call): ?string

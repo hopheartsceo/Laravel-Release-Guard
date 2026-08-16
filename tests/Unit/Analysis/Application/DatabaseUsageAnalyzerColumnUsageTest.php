@@ -68,7 +68,7 @@ PHP;
         $this->assertSame('select', $usages[1]->operation);
     }
 
-    public function test_non_column_terminal_calls_do_not_create_column_usage(): void
+    public function test_plain_get_does_not_create_column_usage(): void
     {
         $source = <<<'PHP'
 <?php
@@ -83,7 +83,12 @@ PHP;
             file: 'app/Services/UserReader.php',
         )->usages();
 
-        $this->assertSame([], $usages);
+        $columnUsages = array_values(array_filter(
+            $usages,
+            static fn ($usage): bool => $usage instanceof ColumnUsage,
+        ));
+
+        $this->assertSame([], $columnUsages);
     }
 
     public function test_it_tracks_columns_through_a_deep_query_builder_chain(): void

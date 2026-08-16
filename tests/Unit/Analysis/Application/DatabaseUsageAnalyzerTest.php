@@ -71,14 +71,12 @@ PHP;
         $this->assertSame([], $usages[0]->columns);
     }
 
-    public function test_terminal_get_without_column_usage_is_ignored(): void
+    public function test_unrelated_get_method_is_ignored(): void
     {
         $source = <<<'PHP'
 <?php
 
-use Illuminate\Support\Facades\DB;
-
-DB::table('users')->get();
+$repository->get();
 PHP;
 
         $snapshot = (new DatabaseUsageAnalyzer())->analyze(
