@@ -11,6 +11,7 @@ use Hopheartsceo\ReleaseGuard\Domain\Schema\RenamedColumn;
 use Hopheartsceo\ReleaseGuard\Domain\Schema\RenamedTable;
 use Hopheartsceo\ReleaseGuard\Domain\Schema\SchemaDelta;
 use Hopheartsceo\ReleaseGuard\Domain\Schema\UnanalyzableMigrationOperation;
+use PhpParser\Node;
 use PhpParser\Node\Expr\Closure;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\StaticCall;
@@ -18,6 +19,7 @@ use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
 use PhpParser\Node\Scalar\String_;
+use PhpParser\Node\Stmt\Class_;
 use PhpParser\NodeFinder;
 
 final class MigrationAnalyzer
@@ -26,12 +28,17 @@ final class MigrationAnalyzer
 
     private readonly NodeFinder $finder;
 
+    private readonly BlueprintAddedColumnAnalyzer $addedColumnAnalyzer;
+
     public function __construct(
         ?PhpAstParserService $parser = null,
         ?NodeFinder $finder = null,
+        ?BlueprintAddedColumnAnalyzer $addedColumnAnalyzer = null,
     ) {
         $this->parser = $parser ?? new PhpAstParserService();
         $this->finder = $finder ?? new NodeFinder();
+        $this->addedColumnAnalyzer = $addedColumnAnalyzer
+            ?? new BlueprintAddedColumnAnalyzer();
     }
 
     public function analyze(
@@ -39,10 +46,11 @@ final class MigrationAnalyzer
         string $file,
     ): SchemaDelta {
         $statements = $this->parser->parse($source);
+        $analysisStatements = $this->analysisStatements($statements);
         $changes = [];
 
         $schemaCalls = $this->finder->findInstanceOf(
-            $statements,
+            $analysisStatements,
             StaticCall::class,
         );
 
@@ -118,7 +126,61 @@ final class MigrationAnalyzer
     }
 
     /**
-     * @return list<DroppedColumn|RenamedColumn|UnanalyzableMigrationOperation>
+     * Real Laravel migration files are analyzed from up() only.
+     *
+     * Plain snippets without a Migration class remain fully analyzable,
+     * which is useful for focused analysis and unit tests.
+     *
+     * @param array<Node\Stmt> $statements
+     * @return array<Node\Stmt>
+     */
+    private function analysisStatements(array $statements): array
+    {
+        $classes = $this->finder->findInstanceOf(
+            $statements,
+            Class_::class,
+        );
+
+        $migrationClasses = array_values(array_filter(
+            $classes,
+            fn (Class_ $class): bool => $this->isMigrationClass($class),
+        ));
+
+        if ($migrationClasses === []) {
+            return $statements;
+        }
+
+        $upStatements = [];
+
+        foreach ($migrationClasses as $migrationClass) {
+            foreach ($migrationClass->getMethods() as $method) {
+                if ($method->name->toString() !== 'up') {
+                    continue;
+                }
+
+                foreach ($method->stmts ?? [] as $statement) {
+                    $upStatements[] = $statement;
+                }
+            }
+        }
+
+        return $upStatements;
+    }
+
+    private function isMigrationClass(Class_ $class): bool
+    {
+        return $class->extends instanceof Name
+            && $class->extends->toString()
+                === 'Illuminate\Database\Migrations\Migration';
+    }
+
+    /**
+     * @return list<
+     *     \Hopheartsceo\ReleaseGuard\Domain\Schema\AddedColumn
+     *     |DroppedColumn
+     *     |RenamedColumn
+     *     |UnanalyzableMigrationOperation
+     * >
      */
     private function analyzeSchemaTableCall(
         StaticCall $schemaCall,
@@ -137,6 +199,15 @@ final class MigrationAnalyzer
 
         if ($blueprintVariable === null) {
             return [];
+        }
+
+        foreach ($this->addedColumnAnalyzer->analyze(
+            statements: $closure->stmts ?? [],
+            blueprintVariable: $blueprintVariable,
+            table: $table,
+            file: $file,
+        ) as $addedColumn) {
+            $changes[] = $addedColumn;
         }
 
         $methodCalls = $this->finder->findInstanceOf(
