@@ -71,14 +71,14 @@ PHP;
         $this->assertSame([], $usages[0]->columns);
     }
 
-    public function test_it_ignores_non_write_query_builder_calls_for_now(): void
+    public function test_terminal_get_without_column_usage_is_ignored(): void
     {
         $source = <<<'PHP'
 <?php
 
 use Illuminate\Support\Facades\DB;
 
-DB::table('users')->where('active', true)->get();
+DB::table('users')->get();
 PHP;
 
         $snapshot = (new DatabaseUsageAnalyzer())->analyze(

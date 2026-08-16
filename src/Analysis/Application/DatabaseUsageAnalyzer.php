@@ -6,6 +6,7 @@ namespace Hopheartsceo\ReleaseGuard\Analysis\Application;
 
 use Hopheartsceo\ReleaseGuard\Analysis\Ast\PhpAstParserService;
 use Hopheartsceo\ReleaseGuard\Domain\Application\ApplicationSnapshot;
+use Hopheartsceo\ReleaseGuard\Domain\Application\ColumnUsage;
 use Hopheartsceo\ReleaseGuard\Domain\Application\WriteUsage;
 use PhpParser\Node\ArrayItem;
 use PhpParser\Node\Expr\Array_;
@@ -43,60 +44,168 @@ final class DatabaseUsageAnalyzer
         );
 
         foreach ($methodCalls as $methodCall) {
-            if (! $this->isInsertCall($methodCall)) {
+            if ($this->isInsertCall($methodCall)) {
+                $usages[] = $this->analyzeInsert(
+                    call: $methodCall,
+                    file: $file,
+                );
+
                 continue;
             }
 
-            $tableCall = $methodCall->var;
+            if ($this->isNamedMethod($methodCall, 'where')) {
+                $usage = $this->analyzeWhere(
+                    call: $methodCall,
+                    file: $file,
+                );
 
-            if (! $tableCall instanceof StaticCall) {
-                continue;
-            }
-
-            $table = $this->literalStringArgument($tableCall, 0);
-            $payload = $methodCall->args[0]->value ?? null;
-
-            $columns = null;
-            $reason = null;
-
-            if ($payload instanceof Array_) {
-                $columns = $this->literalArrayKeys($payload);
-
-                if ($columns === null) {
-                    $reason = 'dynamic_column_key';
+                if ($usage !== null) {
+                    $usages[] = $usage;
                 }
-            } else {
-                $reason = 'dynamic_payload';
+
+                continue;
             }
 
-            if ($table === null) {
-                $reason = $this->withDynamicTable($reason);
+            if ($this->isNamedMethod($methodCall, 'select')) {
+                foreach ($this->analyzeSelect(
+                    call: $methodCall,
+                    file: $file,
+                ) as $usage) {
+                    $usages[] = $usage;
+                }
             }
-
-            $usages[] = new WriteUsage(
-                table: $table,
-                operation: 'insert',
-                columns: $columns,
-                reason: $reason,
-                file: $file,
-                line: $methodCall->getStartLine(),
-            );
         }
 
         return new ApplicationSnapshot($usages);
     }
 
+    private function analyzeInsert(
+        MethodCall $call,
+        string $file,
+    ): WriteUsage {
+        $tableCall = $call->var;
+
+        $table = $tableCall instanceof StaticCall
+            ? $this->literalStringArgument($tableCall, 0)
+            : null;
+
+        $payload = $call->args[0]->value ?? null;
+
+        $columns = null;
+        $reason = null;
+
+        if ($payload instanceof Array_) {
+            $columns = $this->literalArrayKeys($payload);
+
+            if ($columns === null) {
+                $reason = 'dynamic_column_key';
+            }
+        } else {
+            $reason = 'dynamic_payload';
+        }
+
+        if ($table === null) {
+            $reason = $this->withDynamicTable($reason);
+        }
+
+        return new WriteUsage(
+            table: $table,
+            operation: 'insert',
+            columns: $columns,
+            reason: $reason,
+            file: $file,
+            line: $call->getStartLine(),
+        );
+    }
+
+    private function analyzeWhere(
+        MethodCall $call,
+        string $file,
+    ): ?ColumnUsage {
+        $table = $this->queryBuilderTable($call);
+        $column = $this->literalMethodStringArgument($call, 0);
+
+        if ($table === null || $column === null) {
+            return null;
+        }
+
+        return new ColumnUsage(
+            table: $table,
+            column: $column,
+            operation: 'where',
+            file: $file,
+            line: $call->getStartLine(),
+        );
+    }
+
+    /**
+     * @return list<ColumnUsage>
+     */
+    private function analyzeSelect(
+        MethodCall $call,
+        string $file,
+    ): array {
+        $table = $this->queryBuilderTable($call);
+
+        if ($table === null) {
+            return [];
+        }
+
+        $usages = [];
+
+        foreach ($call->args as $argument) {
+            if (! $argument->value instanceof String_) {
+                continue;
+            }
+
+            $usages[] = new ColumnUsage(
+                table: $table,
+                column: $argument->value->value,
+                operation: 'select',
+                file: $file,
+                line: $call->getStartLine(),
+            );
+        }
+
+        return $usages;
+    }
+
+    private function queryBuilderTable(MethodCall $call): ?string
+    {
+        $current = $call->var;
+
+        while ($current instanceof MethodCall) {
+            $current = $current->var;
+        }
+
+        if (
+            ! $current instanceof StaticCall
+            || ! $this->isDbTableCall($current)
+        ) {
+            return null;
+        }
+
+        return $this->literalStringArgument($current, 0);
+    }
+
     private function isInsertCall(MethodCall $call): bool
     {
         if (
-            ! $call->name instanceof Identifier
-            || $call->name->toString() !== 'insert'
+            ! $this->isNamedMethod($call, 'insert')
             || ! $call->var instanceof StaticCall
         ) {
             return false;
         }
 
         return $this->isDbTableCall($call->var);
+    }
+
+    private function isNamedMethod(
+        MethodCall $call,
+        string $method,
+    ): bool {
+        return $call->name instanceof Identifier
+            && $call->name->toString() === $method;
     }
 
     private function isDbTableCall(StaticCall $call): bool
@@ -114,6 +223,19 @@ final class DatabaseUsageAnalyzer
 
     private function literalStringArgument(
         StaticCall $call,
+        int $position,
+    ): ?string {
+        $argument = $call->args[$position]->value ?? null;
+
+        if (! $argument instanceof String_) {
+            return null;
+        }
+
+        return $argument->value;
+    }
+
+    private function literalMethodStringArgument(
+        MethodCall $call,
         int $position,
     ): ?string {
         $argument = $call->args[$position]->value ?? null;

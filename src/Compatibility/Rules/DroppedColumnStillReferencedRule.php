@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace Hopheartsceo\ReleaseGuard\Compatibility\Rules;
 
 use Hopheartsceo\ReleaseGuard\Compatibility\Contracts\CompatibilityRuleInterface;
-
 use Hopheartsceo\ReleaseGuard\Domain\Application\ApplicationSnapshot;
 use Hopheartsceo\ReleaseGuard\Domain\Application\ColumnUsage;
+use Hopheartsceo\ReleaseGuard\Domain\Application\DatabaseUsage;
+use Hopheartsceo\ReleaseGuard\Domain\Application\WriteUsage;
 use Hopheartsceo\ReleaseGuard\Domain\Finding\Confidence;
 use Hopheartsceo\ReleaseGuard\Domain\Finding\Finding;
 use Hopheartsceo\ReleaseGuard\Domain\Finding\Severity;
@@ -31,15 +32,7 @@ final class DroppedColumnStillReferencedRule implements CompatibilityRuleInterfa
             }
 
             foreach ($application->usages() as $usage) {
-                if (! $usage instanceof ColumnUsage) {
-                    continue;
-                }
-
-                if ($usage->table !== $change->table) {
-                    continue;
-                }
-
-                if ($usage->column !== $change->column) {
+                if (! $this->referencesDroppedColumn($usage, $change)) {
                     continue;
                 }
 
@@ -56,5 +49,32 @@ final class DroppedColumnStillReferencedRule implements CompatibilityRuleInterfa
         }
 
         return $findings;
+    }
+
+    private function referencesDroppedColumn(
+        DatabaseUsage $usage,
+        DroppedColumn $change,
+    ): bool {
+        if (
+            $usage->table === null
+            || $usage->table !== $change->table
+        ) {
+            return false;
+        }
+
+        if ($usage instanceof ColumnUsage) {
+            return $usage->column === $change->column;
+        }
+
+        if ($usage instanceof WriteUsage) {
+            return $usage->columns !== null
+                && in_array(
+                    $change->column,
+                    $usage->columns,
+                    true,
+                );
+        }
+
+        return false;
     }
 }
