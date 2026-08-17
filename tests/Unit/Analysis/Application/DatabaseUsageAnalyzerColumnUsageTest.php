@@ -6,6 +6,7 @@ namespace Hopheartsceo\ReleaseGuard\Tests\Unit\Analysis\Application;
 
 use Hopheartsceo\ReleaseGuard\Analysis\Application\DatabaseUsageAnalyzer;
 use Hopheartsceo\ReleaseGuard\Domain\Application\ColumnUsage;
+use Hopheartsceo\ReleaseGuard\Domain\Application\TableUsage;
 use PHPUnit\Framework\TestCase;
 
 final class DatabaseUsageAnalyzerColumnUsageTest extends TestCase
@@ -164,7 +165,7 @@ PHP;
         $this->assertSame([], $usages);
     }
 
-    public function test_dynamic_where_column_does_not_create_definite_column_usage(): void
+    public function test_dynamic_where_column_preserves_only_definite_table_usage(): void
     {
         $source = <<<'PHP'
 <?php
@@ -183,7 +184,10 @@ PHP;
             file: 'app/Services/DynamicLookup.php',
         )->usages();
 
-        $this->assertSame([], $usages);
+        $this->assertCount(1, $usages);
+        $this->assertInstanceOf(TableUsage::class, $usages[0]);
+        $this->assertSame('users', $usages[0]->table);
+        $this->assertSame('first', $usages[0]->operation);
     }
 
     public function test_literal_select_columns_remain_known_when_another_column_is_dynamic(): void

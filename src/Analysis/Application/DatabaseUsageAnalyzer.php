@@ -20,6 +20,104 @@ use PhpParser\NodeFinder;
 
 final class DatabaseUsageAnalyzer
 {
+    /**
+     * @var list<string>
+     */
+    private const FIRST_ARGUMENT_COLUMN_METHODS = [
+        'where',
+        'orWhere',
+        'whereIn',
+        'orWhereIn',
+        'whereNotIn',
+        'orWhereNotIn',
+        'whereNull',
+        'orWhereNull',
+        'whereNotNull',
+        'orWhereNotNull',
+        'whereBetween',
+        'orWhereBetween',
+        'whereNotBetween',
+        'orWhereNotBetween',
+        'whereDate',
+        'whereMonth',
+        'whereDay',
+        'whereYear',
+        'whereTime',
+        'whereJsonContains',
+        'whereJsonDoesntContain',
+        'whereJsonLength',
+        'whereIntegerInRaw',
+        'whereIntegerNotInRaw',
+        'whereLike',
+        'orWhereLike',
+        'whereNotLike',
+        'orWhereNotLike',
+        'orderBy',
+        'orderByDesc',
+        'having',
+        'orHaving',
+        'havingBetween',
+        'increment',
+        'decrement',
+    ];
+
+    /**
+     * @var list<string>
+     */
+    private const MULTI_COLUMN_METHODS = [
+        'select',
+        'addSelect',
+        'groupBy',
+    ];
+
+    /**
+     * @var list<string>
+     */
+    private const INSERT_METHODS = [
+        'insert',
+        'insertOrIgnore',
+        'insertGetId',
+    ];
+
+    /**
+     * @var list<string>
+     */
+    private const PAYLOAD_WRITE_METHODS = [
+        'update',
+    ];
+
+    /**
+     * @var list<string>
+     */
+    private const TABLE_TERMINALS = [
+        'get',
+        'first',
+        'firstOrFail',
+        'sole',
+        'find',
+        'pluck',
+        'value',
+        'exists',
+        'doesntExist',
+        'existsOr',
+        'doesntExistOr',
+        'count',
+        'sum',
+        'avg',
+        'average',
+        'min',
+        'max',
+        'delete',
+        'cursor',
+        'lazy',
+        'lazyById',
+        'chunk',
+        'chunkById',
+        'paginate',
+        'simplePaginate',
+        'cursorPaginate',
+    ];
+
     private readonly PhpAstParserService $parser;
 
     private readonly NodeFinder $finder;
@@ -44,19 +142,28 @@ final class DatabaseUsageAnalyzer
             MethodCall::class,
         );
 
-        foreach ($methodCalls as $methodCall) {
-            if ($this->isInsertCall($methodCall)) {
-                $usages[] = $this->analyzeInsert(
-                    call: $methodCall,
-                    file: $file,
-                );
+        foreach ($methodCalls as $call) {
+            $method = $this->methodName($call);
 
+            if ($method === null) {
                 continue;
             }
 
-            if ($this->isNamedMethod($methodCall, 'where')) {
-                $usage = $this->analyzeWhere(
-                    call: $methodCall,
+            if (
+                in_array($method, self::INSERT_METHODS, true)
+                || in_array(
+                    $method,
+                    self::PAYLOAD_WRITE_METHODS,
+                    true,
+                )
+            ) {
+                if (! $this->isQueryBuilderCall($call)) {
+                    continue;
+                }
+
+                $usage = $this->analyzePayloadWrite(
+                    call: $call,
+                    operation: $method,
                     file: $file,
                 );
 
@@ -67,20 +174,34 @@ final class DatabaseUsageAnalyzer
                 continue;
             }
 
-            if ($this->isNamedMethod($methodCall, 'select')) {
-                foreach ($this->analyzeSelect(
-                    call: $methodCall,
-                    file: $file,
-                ) as $usage) {
-                    $usages[] = $usage;
+            $columns = $this->literalReferencedColumns($call);
+
+            if ($columns !== []) {
+                $table = $this->queryBuilderTable($call);
+
+                if ($table === null) {
+                    continue;
+                }
+
+                foreach ($columns as $column) {
+                    $usages[] = new ColumnUsage(
+                        table: $table,
+                        column: $column,
+                        operation: $method,
+                        file: $file,
+                        line: $call->getStartLine(),
+                    );
                 }
 
                 continue;
             }
 
-            if ($this->isNamedMethod($methodCall, 'get')) {
-                $usage = $this->analyzeGet(
-                    call: $methodCall,
+            if (
+                in_array($method, self::TABLE_TERMINALS, true)
+            ) {
+                $usage = $this->analyzeTableTerminal(
+                    call: $call,
+                    operation: $method,
                     file: $file,
                 );
 
@@ -93,23 +214,31 @@ final class DatabaseUsageAnalyzer
         return new ApplicationSnapshot($usages);
     }
 
-    private function analyzeInsert(
+    private function analyzePayloadWrite(
         MethodCall $call,
+        string $operation,
         string $file,
-    ): WriteUsage {
-        $tableCall = $call->var;
-
-        $table = $tableCall instanceof StaticCall
-            ? $this->literalStringArgument($tableCall, 0)
-            : null;
-
+    ): ?WriteUsage {
+        $table = $this->queryBuilderTable($call);
         $payload = $call->args[0]->value ?? null;
+
+        if (
+            $payload instanceof Array_
+            && $payload->items === []
+            && in_array(
+                $operation,
+                ['insert', 'insertOrIgnore'],
+                true,
+            )
+        ) {
+            return null;
+        }
 
         $columns = null;
         $reason = null;
 
         if ($payload instanceof Array_) {
-            $columns = $this->literalArrayKeys($payload);
+            $columns = $this->literalWriteColumns($payload);
 
             if ($columns === null) {
                 $reason = 'dynamic_column_key';
@@ -124,7 +253,7 @@ final class DatabaseUsageAnalyzer
 
         return new WriteUsage(
             table: $table,
-            operation: 'insert',
+            operation: $operation,
             columns: $columns,
             reason: $reason,
             file: $file,
@@ -132,63 +261,16 @@ final class DatabaseUsageAnalyzer
         );
     }
 
-    private function analyzeWhere(
+    private function analyzeTableTerminal(
         MethodCall $call,
+        string $operation,
         string $file,
-    ): ?ColumnUsage {
-        $table = $this->queryBuilderTable($call);
-        $column = $this->literalMethodStringArgument($call, 0);
-
-        if ($table === null || $column === null) {
+    ): ?TableUsage {
+        if (! $this->isQueryBuilderCall($call)) {
             return null;
         }
 
-        return new ColumnUsage(
-            table: $table,
-            column: $column,
-            operation: 'where',
-            file: $file,
-            line: $call->getStartLine(),
-        );
-    }
-
-    /**
-     * @return list<ColumnUsage>
-     */
-    private function analyzeSelect(
-        MethodCall $call,
-        string $file,
-    ): array {
-        $table = $this->queryBuilderTable($call);
-
-        if ($table === null) {
-            return [];
-        }
-
-        $usages = [];
-
-        foreach ($call->args as $argument) {
-            if (! $argument->value instanceof String_) {
-                continue;
-            }
-
-            $usages[] = new ColumnUsage(
-                table: $table,
-                column: $argument->value->value,
-                operation: 'select',
-                file: $file,
-                line: $call->getStartLine(),
-            );
-        }
-
-        return $usages;
-    }
-
-    private function analyzeGet(
-        MethodCall $call,
-        string $file,
-    ): ?TableUsage {
-        if ($this->hasSpecificUsageInChain($call)) {
+        if ($this->hasDefiniteColumnUsageInChain($call)) {
             return null;
         }
 
@@ -200,21 +282,107 @@ final class DatabaseUsageAnalyzer
 
         return new TableUsage(
             table: $table,
-            operation: 'get',
+            operation: $operation,
             file: $file,
             line: $call->getStartLine(),
         );
     }
 
-    private function hasSpecificUsageInChain(MethodCall $call): bool
-    {
+    /**
+     * @return list<string>
+     */
+    private function literalReferencedColumns(
+        MethodCall $call,
+    ): array {
+        $method = $this->methodName($call);
+
+        if ($method === null || ! $this->isQueryBuilderCall($call)) {
+            return [];
+        }
+
+        if (
+            in_array(
+                $method,
+                self::FIRST_ARGUMENT_COLUMN_METHODS,
+                true,
+            )
+        ) {
+            return $this->literalColumnsAt($call, 0);
+        }
+
+        if (
+            in_array($method, self::MULTI_COLUMN_METHODS, true)
+        ) {
+            return $this->literalColumnsFromArguments($call);
+        }
+
+        if ($method === 'whereColumn') {
+            $columns = $this->literalColumnsAt($call, 0);
+
+            $secondPosition = isset($call->args[2])
+                ? 2
+                : 1;
+
+            return array_values(array_unique([
+                ...$columns,
+                ...$this->literalColumnsAt(
+                    $call,
+                    $secondPosition,
+                ),
+            ]));
+        }
+
+        if ($method === 'pluck') {
+            return array_values(array_unique([
+                ...$this->literalColumnsAt($call, 0),
+                ...$this->literalColumnsAt($call, 1),
+            ]));
+        }
+
+        if ($method === 'value') {
+            return $this->literalColumnsAt($call, 0);
+        }
+
+        if ($method === 'find') {
+            return $this->literalColumnsAt($call, 1);
+        }
+
+        if (
+            in_array(
+                $method,
+                ['get', 'first', 'firstOrFail', 'sole'],
+                true,
+            )
+        ) {
+            return $this->literalColumnsFromArguments($call);
+        }
+
+        if (
+            in_array(
+                $method,
+                ['count', 'sum', 'avg', 'average', 'min', 'max'],
+                true,
+            )
+        ) {
+            $columns = $this->literalColumnsAt($call, 0);
+
+            return array_values(array_filter(
+                $columns,
+                static fn (string $column): bool =>
+                    $column !== '*',
+            ));
+        }
+
+        return [];
+    }
+
+    private function hasDefiniteColumnUsageInChain(
+        MethodCall $call,
+    ): bool {
         $current = $call->var;
 
         while ($current instanceof MethodCall) {
-            if (
-                $this->isNamedMethod($current, 'where')
-                || $this->isNamedMethod($current, 'select')
-            ) {
+            if ($this->literalReferencedColumns($current) !== []) {
                 return true;
             }
 
@@ -224,88 +392,125 @@ final class DatabaseUsageAnalyzer
         return false;
     }
 
-    private function queryBuilderTable(MethodCall $call): ?string
-    {
-        $current = $call->var;
-
-        while ($current instanceof MethodCall) {
-            $current = $current->var;
-        }
-
-        if (
-            ! $current instanceof StaticCall
-            || ! $this->isDbTableCall($current)
-        ) {
-            return null;
-        }
-
-        return $this->literalStringArgument($current, 0);
-    }
-
-    private function isInsertCall(MethodCall $call): bool
-    {
-        if (
-            ! $this->isNamedMethod($call, 'insert')
-            || ! $call->var instanceof StaticCall
-        ) {
-            return false;
-        }
-
-        return $this->isDbTableCall($call->var);
-    }
-
-    private function isNamedMethod(
+    /**
+     * @return list<string>
+     */
+    private function literalColumnsFromArguments(
         MethodCall $call,
-        string $method,
-    ): bool {
-        return $call->name instanceof Identifier
-            && $call->name->toString() === $method;
-    }
+    ): array {
+        $columns = [];
 
-    private function isDbTableCall(StaticCall $call): bool
-    {
-        if (
-            ! $call->class instanceof Name
-            || ! $call->name instanceof Identifier
-        ) {
-            return false;
+        foreach ($call->args as $argument) {
+            foreach (
+                $this->literalColumnsFromValue($argument->value)
+                as $column
+            ) {
+                $columns[] = $column;
+            }
         }
 
-        return $call->class->toString() === 'Illuminate\Support\Facades\DB'
-            && $call->name->toString() === 'table';
+        return array_values(array_unique($columns));
     }
 
-    private function literalStringArgument(
-        StaticCall $call,
-        int $position,
-    ): ?string {
-        $argument = $call->args[$position]->value ?? null;
-
-        if (! $argument instanceof String_) {
-            return null;
-        }
-
-        return $argument->value;
-    }
-
-    private function literalMethodStringArgument(
+    /**
+     * @return list<string>
+     */
+    private function literalColumnsAt(
         MethodCall $call,
         int $position,
-    ): ?string {
-        $argument = $call->args[$position]->value ?? null;
+    ): array {
+        $value = $call->args[$position]->value ?? null;
 
-        if (! $argument instanceof String_) {
-            return null;
+        return $this->literalColumnsFromValue($value);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function literalColumnsFromValue(
+        mixed $value,
+    ): array {
+        if ($value instanceof String_) {
+            return [$value->value];
         }
 
-        return $argument->value;
+        if (! $value instanceof Array_) {
+            return [];
+        }
+
+        $columns = [];
+
+        foreach ($value->items as $item) {
+            if (
+                $item instanceof ArrayItem
+                && $item->value instanceof String_
+            ) {
+                $columns[] = $item->value->value;
+            }
+        }
+
+        return $columns;
     }
 
     /**
      * @return list<string>|null
      */
-    private function literalArrayKeys(Array_ $array): ?array
-    {
+    private function literalWriteColumns(
+        Array_ $array,
+    ): ?array {
+        if ($array->items === []) {
+            return [];
+        }
+
+        $associativeColumns = $this->associativeArrayKeys($array);
+
+        if ($associativeColumns !== null) {
+            return $associativeColumns;
+        }
+
+        $rows = [];
+
+        foreach ($array->items as $item) {
+            if (
+                ! $item instanceof ArrayItem
+                || $item->key !== null
+                || ! $item->value instanceof Array_
+            ) {
+                return null;
+            }
+
+            $columns = $this->associativeArrayKeys(
+                $item->value,
+            );
+
+            if ($columns === null) {
+                return null;
+            }
+
+            $rows[] = $columns;
+        }
+
+        if ($rows === []) {
+            return null;
+        }
+
+        $expected = $rows[0];
+
+        foreach ($rows as $row) {
+            if ($row !== $expected) {
+                return null;
+            }
+        }
+
+        return $expected;
+    }
+
+    /**
+     * @return list<string>|null
+     */
+    private function associativeArrayKeys(
+        Array_ $array,
+    ): ?array {
         $columns = [];
 
         foreach ($array->items as $item) {
@@ -322,11 +527,92 @@ final class DatabaseUsageAnalyzer
         return $columns;
     }
 
-    private function withDynamicTable(?string $reason): string
-    {
+    private function queryBuilderTable(
+        MethodCall $call,
+    ): ?string {
+        $root = $this->queryBuilderRoot($call);
+
+        if ($root === null) {
+            return null;
+        }
+
+        return $this->literalStaticStringArgument(
+            $root,
+            0,
+        );
+    }
+
+    private function isQueryBuilderCall(
+        MethodCall $call,
+    ): bool {
+        return $this->queryBuilderRoot($call) !== null;
+    }
+
+    private function queryBuilderRoot(
+        MethodCall $call,
+    ): ?StaticCall {
+        $current = $call->var;
+
+        while ($current instanceof MethodCall) {
+            $current = $current->var;
+        }
+
+        if (
+            ! $current instanceof StaticCall
+            || ! $this->isDbTableCall($current)
+        ) {
+            return null;
+        }
+
+        return $current;
+    }
+
+    private function methodName(
+        MethodCall $call,
+    ): ?string {
+        if (! $call->name instanceof Identifier) {
+            return null;
+        }
+
+        return $call->name->toString();
+    }
+
+    private function isDbTableCall(
+        StaticCall $call,
+    ): bool {
+        if (
+            ! $call->class instanceof Name
+            || ! $call->name instanceof Identifier
+        ) {
+            return false;
+        }
+
+        return $call->class->toString()
+                === 'Illuminate\Support\Facades\DB'
+            && $call->name->toString() === 'table';
+    }
+
+    private function literalStaticStringArgument(
+        StaticCall $call,
+        int $position,
+    ): ?string {
+        $argument = $call->args[$position]->value ?? null;
+
+        if (! $argument instanceof String_) {
+            return null;
+        }
+
+        return $argument->value;
+    }
+
+    private function withDynamicTable(
+        ?string $reason,
+    ): string {
         return match ($reason) {
-            'dynamic_payload' => 'dynamic_table_and_payload',
-            'dynamic_column_key' => 'dynamic_table_and_column_key',
+            'dynamic_payload' =>
+                'dynamic_table_and_payload',
+            'dynamic_column_key' =>
+                'dynamic_table_and_column_key',
             default => 'dynamic_table',
         };
     }

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Hopheartsceo\ReleaseGuard\Analysis\Release;
 
 use Hopheartsceo\ReleaseGuard\Analysis\Application\DatabaseUsageAnalyzer;
+use Hopheartsceo\ReleaseGuard\Analysis\Application\EloquentUsageAnalyzer;
+use Hopheartsceo\ReleaseGuard\Analysis\Application\ModelIndexService;
 use Hopheartsceo\ReleaseGuard\Analysis\Migrations\MigrationAnalyzer;
 use Hopheartsceo\ReleaseGuard\Compatibility\CompatibilityEngine;
 use Hopheartsceo\ReleaseGuard\Domain\AnalysisResult;
@@ -23,8 +25,19 @@ final class ReleaseGuardAnalysisPipeline
         private readonly DatabaseUsageAnalyzer $databaseUsageAnalyzer,
         private readonly MigrationAnalyzer $migrationAnalyzer,
         private readonly CompatibilityEngine $compatibilityEngine,
+        ?ModelIndexService $modelIndexService = null,
+        ?EloquentUsageAnalyzer $eloquentUsageAnalyzer = null,
     ) {
+        $this->modelIndexService = $modelIndexService
+            ?? new ModelIndexService();
+
+        $this->eloquentUsageAnalyzer = $eloquentUsageAnalyzer
+            ?? new EloquentUsageAnalyzer();
     }
+
+    private readonly ModelIndexService $modelIndexService;
+
+    private readonly EloquentUsageAnalyzer $eloquentUsageAnalyzer;
 
     /**
      * @param list<string> $applicationPaths
@@ -48,15 +61,37 @@ final class ReleaseGuardAnalysisPipeline
                 paths: $migrationPaths,
             );
 
+        $modelIndex = $this->modelIndexService->build(
+            $baseFiles,
+        );
+
         $usages = [];
 
         foreach ($baseFiles as $file) {
-            $snapshot = $this->databaseUsageAnalyzer->analyze(
-                source: $file->contents,
-                file: $file->path,
-            );
+            $queryBuilderSnapshot =
+                $this->databaseUsageAnalyzer->analyze(
+                    source: $file->contents,
+                    file: $file->path,
+                );
 
-            foreach ($snapshot->usages() as $usage) {
+            foreach (
+                $queryBuilderSnapshot->usages()
+                as $usage
+            ) {
+                $usages[] = $usage;
+            }
+
+            $eloquentSnapshot =
+                $this->eloquentUsageAnalyzer->analyze(
+                    source: $file->contents,
+                    file: $file->path,
+                    models: $modelIndex,
+                );
+
+            foreach (
+                $eloquentSnapshot->usages()
+                as $usage
+            ) {
                 $usages[] = $usage;
             }
         }
