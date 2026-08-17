@@ -38,14 +38,30 @@ final class RequiredColumnBreaksBaseWritesRule implements CompatibilityRuleInter
                     continue;
                 }
 
-                if (! in_array(
-                    $usage->operation,
-                    [
-                        'insert',
-                        'insertGetId',
-                    ],
-                    true,
-                )) {
+                $definiteInsertOperations = [
+                    'insert',
+                    'insertGetId',
+                ];
+
+                $eloquentCreateOperations = [
+                    'create',
+                    'forceCreate',
+                    'createQuietly',
+                    'forceCreateQuietly',
+                ];
+
+                if (
+                    ! in_array(
+                        $usage->operation,
+                        $definiteInsertOperations,
+                        true,
+                    )
+                    && ! in_array(
+                        $usage->operation,
+                        $eloquentCreateOperations,
+                        true,
+                    )
+                ) {
                     continue;
                 }
 
@@ -56,11 +72,43 @@ final class RequiredColumnBreaksBaseWritesRule implements CompatibilityRuleInter
                     continue;
                 }
 
-                if ($usage->columns === null) {
+                if (in_array(
+                    $usage->operation,
+                    $eloquentCreateOperations,
+                    true,
+                )) {
+                    $findings[] = new Finding(
+                        code: 'DB005',
+                        severity: Severity::WARNING,
+                        confidence: Confidence::UNKNOWN,
+                        table: $change->table,
+                        column: $change->column,
+                        usage: $usage,
+                        change: $change,
+                    );
+
                     continue;
                 }
 
-                if (in_array($change->column, $usage->columns, true)) {
+                if ($usage->columns === null) {
+                    $findings[] = new Finding(
+                        code: 'DB005',
+                        severity: Severity::WARNING,
+                        confidence: Confidence::UNKNOWN,
+                        table: $change->table,
+                        column: $change->column,
+                        usage: $usage,
+                        change: $change,
+                    );
+
+                    continue;
+                }
+
+                if (in_array(
+                    $change->column,
+                    $usage->columns,
+                    true,
+                )) {
                     continue;
                 }
 

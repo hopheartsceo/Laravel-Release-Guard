@@ -7,6 +7,8 @@ namespace Hopheartsceo\ReleaseGuard\Tests\Unit\Compatibility\Rules;
 use Hopheartsceo\ReleaseGuard\Compatibility\Rules\RequiredColumnBreaksBaseWritesRule;
 use Hopheartsceo\ReleaseGuard\Domain\Application\ApplicationSnapshot;
 use Hopheartsceo\ReleaseGuard\Domain\Application\WriteUsage;
+use Hopheartsceo\ReleaseGuard\Domain\Finding\Confidence;
+use Hopheartsceo\ReleaseGuard\Domain\Finding\Severity;
 use Hopheartsceo\ReleaseGuard\Domain\Schema\AddedColumn;
 use Hopheartsceo\ReleaseGuard\Domain\Schema\SchemaDelta;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -25,8 +27,8 @@ final class RequiredColumnBreaksBaseWritesInsertVariantsTest extends TestCase
         $this->assertSame('DB005', $findings[0]->code);
     }
 
-    #[DataProvider('nonDefiniteInsertOperations')]
-    public function test_non_deterministic_insert_operations_do_not_block(
+    #[DataProvider('eloquentCreateOperations')]
+    public function test_eloquent_create_operations_are_warning_unknown(
         string $operation,
     ): void {
         $findings = $this->evaluate(
@@ -34,21 +36,39 @@ final class RequiredColumnBreaksBaseWritesInsertVariantsTest extends TestCase
             columns: ['name', 'email'],
         );
 
-        $this->assertSame([], $findings);
+        $this->assertCount(1, $findings);
+        $this->assertSame('DB005', $findings[0]->code);
+        $this->assertSame(
+            Severity::WARNING,
+            $findings[0]->severity,
+        );
+        $this->assertSame(
+            Confidence::UNKNOWN,
+            $findings[0]->confidence,
+        );
     }
 
     /**
      * @return array<string, array{string}>
      */
-    public static function nonDefiniteInsertOperations(): array
+    public static function eloquentCreateOperations(): array
     {
         return [
-            'insertOrIgnore' => ['insertOrIgnore'],
             'create' => ['create'],
             'forceCreate' => ['forceCreate'],
             'createQuietly' => ['createQuietly'],
             'forceCreateQuietly' => ['forceCreateQuietly'],
         ];
+    }
+
+    public function test_insert_or_ignore_remains_non_definite(): void
+    {
+        $findings = $this->evaluate(
+            operation: 'insertOrIgnore',
+            columns: ['name', 'email'],
+        );
+
+        $this->assertSame([], $findings);
     }
 
     /**

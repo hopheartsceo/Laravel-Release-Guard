@@ -207,6 +207,74 @@ PHP,
         );
     }
 
+    public function test_child_table_redeclaration_resets_inherited_explicit_table_to_convention(): void
+    {
+        $children = [
+            'explicit null' => <<<'PHP'
+<?php
+
+namespace App\Models;
+
+final class Invoice extends BaseRecord
+{
+    protected $table = null;
+}
+PHP,
+            'uninitialized' => <<<'PHP'
+<?php
+
+namespace App\Models;
+
+final class Invoice extends BaseRecord
+{
+    protected $table;
+}
+PHP,
+        ];
+
+        foreach ($children as $label => $child) {
+            $files = [
+                new SourceFile(
+                    path: 'app/Models/BaseRecord.php',
+                    contents: <<<'PHP'
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+abstract class BaseRecord extends Model
+{
+    protected $table = 'legacy_records';
+}
+PHP,
+                ),
+                new SourceFile(
+                    path: 'app/Models/Invoice.php',
+                    contents: $child,
+                ),
+            ];
+
+            $index = (new ModelIndexService())->build(
+                $files,
+            );
+
+            $model = $index->find(
+                'App\Models\Invoice',
+            );
+
+            $this->assertNotNull(
+                $model,
+                $label,
+            );
+            $this->assertSame(
+                'invoices',
+                $model->table,
+                $label,
+            );
+        }
+    }
+
     public function test_default_laravel_authenticatable_user_is_indexed(): void
     {
         $index = $this->build(<<<'PHP'

@@ -99,6 +99,42 @@ PHP;
         $this->assertSame('dynamic_table', $changes[0]->reason);
     }
 
+    public function test_raw_db_statement_is_reported_as_unanalyzable(): void
+    {
+        $source = <<<'PHP'
+<?php
+
+use Illuminate\Support\Facades\DB;
+
+DB::statement(
+    'ALTER TABLE users DROP COLUMN legacy_status'
+);
+PHP;
+
+        $changes = (new MigrationAnalyzer())->analyze(
+            source: $source,
+            file: 'database/migrations/raw_statement.php',
+        )->changes();
+
+        $this->assertCount(1, $changes);
+        $this->assertInstanceOf(
+            UnanalyzableMigrationOperation::class,
+            $changes[0],
+        );
+
+        $this->assertSame(
+            'statement',
+            $changes[0]->operation,
+        );
+        $this->assertNull($changes[0]->table);
+        $this->assertNull($changes[0]->column);
+        $this->assertSame(
+            'raw_sql',
+            $changes[0]->reason,
+        );
+    }
+
+
     public function test_dynamic_schema_rename_target_is_reported_as_unanalyzable(): void
     {
         $source = <<<'PHP'
