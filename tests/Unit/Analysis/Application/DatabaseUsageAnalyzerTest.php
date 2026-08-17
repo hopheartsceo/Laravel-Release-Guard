@@ -48,7 +48,7 @@ PHP;
         $this->assertSame(5, $usage->line);
     }
 
-    public function test_it_preserves_an_empty_literal_insert_payload(): void
+    public function test_it_preserves_empty_insert_as_noop(): void
     {
         $source = <<<'PHP'
 <?php
@@ -68,7 +68,11 @@ PHP;
         $this->assertCount(1, $usages);
         $this->assertInstanceOf(WriteUsage::class, $usages[0]);
         $this->assertSame('audit_logs', $usages[0]->table);
-        $this->assertSame([], $usages[0]->columns);
+        $this->assertNull($usages[0]->columns);
+        $this->assertSame(
+            'empty_insert_noop',
+            $usages[0]->reason,
+        );
     }
 
     public function test_unrelated_get_method_is_ignored(): void

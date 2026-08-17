@@ -221,7 +221,17 @@ final class DatabaseUsageAnalyzer
         $columns = null;
         $reason = null;
 
-        if ($payload instanceof Array_) {
+        if (
+            $payload instanceof Array_
+            && $payload->items === []
+            && in_array(
+                $operation,
+                ['insert', 'insertOrIgnore'],
+                true,
+            )
+        ) {
+            $reason = 'empty_insert_noop';
+        } elseif ($payload instanceof Array_) {
             $columns = $this->literalWriteColumns($payload);
 
             if ($columns === null) {

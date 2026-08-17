@@ -83,6 +83,20 @@ final class EloquentUsageAnalyzer
     ];
 
     /**
+     * Model creation operations whose final SQL columns may be
+     * affected by model defaults, mass assignment, mutators,
+     * casts, and model lifecycle behavior.
+     *
+     * @var list<string>
+     */
+    private const MODEL_CREATE_METHODS = [
+        'create',
+        'forceCreate',
+        'createQuietly',
+        'forceCreateQuietly',
+    ];
+
+    /**
      * @var list<string>
      */
     private const UPDATE_WRITE_METHODS = [
@@ -360,6 +374,21 @@ final class EloquentUsageAnalyzer
         string $operation,
         string $file,
     ): WriteUsage {
+        if (in_array(
+            $operation,
+            self::MODEL_CREATE_METHODS,
+            true,
+        )) {
+            return new WriteUsage(
+                table: $table,
+                operation: $operation,
+                columns: null,
+                reason: 'eloquent_model_create_semantics',
+                file: $file,
+                line: $call->getStartLine(),
+            );
+        }
+
         $payload = $call->args[0]->value ?? null;
 
         [$columns, $reason] =
@@ -381,6 +410,21 @@ final class EloquentUsageAnalyzer
         string $operation,
         string $file,
     ): WriteUsage {
+        if (in_array(
+            $operation,
+            self::MODEL_CREATE_METHODS,
+            true,
+        )) {
+            return new WriteUsage(
+                table: $table,
+                operation: $operation,
+                columns: null,
+                reason: 'eloquent_model_create_semantics',
+                file: $file,
+                line: $call->getStartLine(),
+            );
+        }
+
         $payload = $call->args[0]->value ?? null;
 
         [$columns, $reason] =

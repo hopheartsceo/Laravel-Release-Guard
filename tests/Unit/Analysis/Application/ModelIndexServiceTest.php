@@ -207,6 +207,27 @@ PHP,
         );
     }
 
+    public function test_default_laravel_authenticatable_user_is_indexed(): void
+    {
+        $index = $this->build(<<<'PHP'
+<?php
+
+namespace App\Models;
+
+use Illuminate\Foundation\Auth\User as Authenticatable;
+
+final class User extends Authenticatable
+{
+}
+PHP);
+
+        $model = $index->find('App\Models\User');
+
+        $this->assertNotNull($model);
+        $this->assertSame('users', $model->table);
+        $this->assertNull($model->reason);
+    }
+
     public function test_non_model_class_is_not_indexed(): void
     {
         $index = $this->build(<<<'PHP'

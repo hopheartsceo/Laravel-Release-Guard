@@ -42,12 +42,7 @@ final class RequiredColumnBreaksBaseWritesRule implements CompatibilityRuleInter
                     $usage->operation,
                     [
                         'insert',
-                        'insertOrIgnore',
                         'insertGetId',
-                        'create',
-                        'forceCreate',
-                        'createQuietly',
-                        'forceCreateQuietly',
                     ],
                     true,
                 )) {

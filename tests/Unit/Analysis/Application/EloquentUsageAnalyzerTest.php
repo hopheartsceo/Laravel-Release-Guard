@@ -91,7 +91,7 @@ PHP;
         $this->assertSame('first', $usages[0]->operation);
     }
 
-    public function test_create_is_preserved_as_insert_write(): void
+    public function test_create_preserves_table_without_inventing_definite_columns(): void
     {
         $source = <<<'PHP'
 <?php
@@ -115,11 +115,11 @@ PHP;
         );
         $this->assertSame('users', $usages[0]->table);
         $this->assertSame('create', $usages[0]->operation);
+        $this->assertNull($usages[0]->columns);
         $this->assertSame(
-            ['name', 'email'],
-            $usages[0]->columns,
+            'eloquent_model_create_semantics',
+            $usages[0]->reason,
         );
-        $this->assertNull($usages[0]->reason);
     }
 
     public function test_custom_model_table_is_used(): void

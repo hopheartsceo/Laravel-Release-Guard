@@ -138,7 +138,7 @@ namespace App\Services;
 
 use App\Models\User;
 
-User::create([
+User::insert([
     'name' => $name,
     'email' => $email,
 ]);

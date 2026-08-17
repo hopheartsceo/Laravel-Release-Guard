@@ -19,8 +19,15 @@ use PhpParser\NodeFinder;
 
 final class ModelIndexService
 {
-    private const ELOQUENT_MODEL =
-        'Illuminate\Database\Eloquent\Model';
+    /**
+     * Framework classes that are known Eloquent model roots.
+     *
+     * @var list<string>
+     */
+    private const ELOQUENT_BASE_CLASSES = [
+        'Illuminate\Database\Eloquent\Model',
+        'Illuminate\Foundation\Auth\User',
+    ];
 
     private readonly PhpAstParserService $parser;
 
@@ -207,7 +214,11 @@ final class ModelIndexService
 
         $parent = $candidate['parent'];
 
-        if ($parent === self::ELOQUENT_MODEL) {
+        if (in_array(
+            $parent,
+            self::ELOQUENT_BASE_CLASSES,
+            true,
+        )) {
             return true;
         }
 
@@ -258,7 +269,11 @@ final class ModelIndexService
         $parent = $candidate['parent'];
 
         if (
-            $parent !== self::ELOQUENT_MODEL
+            ! in_array(
+                $parent,
+                self::ELOQUENT_BASE_CLASSES,
+                true,
+            )
             && isset($candidates[$parent])
             && $this->isEloquentModel(
                 $parent,

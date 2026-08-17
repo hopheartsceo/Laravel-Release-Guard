@@ -14,10 +14,51 @@ use PHPUnit\Framework\TestCase;
 
 final class RequiredColumnBreaksBaseWritesInsertVariantsTest extends TestCase
 {
-    #[DataProvider('insertionOperations')]
-    public function test_insert_variants_missing_required_column_block(
+    public function test_insert_get_id_missing_required_column_blocks(): void
+    {
+        $findings = $this->evaluate(
+            operation: 'insertGetId',
+            columns: ['name', 'email'],
+        );
+
+        $this->assertCount(1, $findings);
+        $this->assertSame('DB005', $findings[0]->code);
+    }
+
+    #[DataProvider('nonDefiniteInsertOperations')]
+    public function test_non_deterministic_insert_operations_do_not_block(
         string $operation,
     ): void {
+        $findings = $this->evaluate(
+            operation: $operation,
+            columns: ['name', 'email'],
+        );
+
+        $this->assertSame([], $findings);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function nonDefiniteInsertOperations(): array
+    {
+        return [
+            'insertOrIgnore' => ['insertOrIgnore'],
+            'create' => ['create'],
+            'forceCreate' => ['forceCreate'],
+            'createQuietly' => ['createQuietly'],
+            'forceCreateQuietly' => ['forceCreateQuietly'],
+        ];
+    }
+
+    /**
+     * @param list<string>|null $columns
+     * @return list<object>
+     */
+    private function evaluate(
+        string $operation,
+        ?array $columns,
+    ): array {
         $change = new AddedColumn(
             table: 'users',
             column: 'tenant_id',
@@ -32,33 +73,15 @@ final class RequiredColumnBreaksBaseWritesInsertVariantsTest extends TestCase
         $usage = new WriteUsage(
             table: 'users',
             operation: $operation,
-            columns: ['name', 'email'],
+            columns: $columns,
             reason: null,
             file: 'app/Services/UserWriter.php',
             line: 20,
         );
 
-        $findings = (new RequiredColumnBreaksBaseWritesRule())->evaluate(
+        return (new RequiredColumnBreaksBaseWritesRule())->evaluate(
             new SchemaDelta([$change]),
             new ApplicationSnapshot([$usage]),
         );
-
-        $this->assertCount(1, $findings);
-        $this->assertSame('DB005', $findings[0]->code);
-    }
-
-    /**
-     * @return array<string, array{string}>
-     */
-    public static function insertionOperations(): array
-    {
-        return [
-            'insertOrIgnore' => ['insertOrIgnore'],
-            'insertGetId' => ['insertGetId'],
-            'create' => ['create'],
-            'forceCreate' => ['forceCreate'],
-            'createQuietly' => ['createQuietly'],
-            'forceCreateQuietly' => ['forceCreateQuietly'],
-        ];
     }
 }
