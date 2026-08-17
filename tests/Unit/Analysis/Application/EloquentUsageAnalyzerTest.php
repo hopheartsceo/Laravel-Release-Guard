@@ -159,6 +159,42 @@ PHP;
         );
     }
 
+    public function test_static_empty_insert_is_ignored_as_noop(): void
+    {
+        $source = <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+User::insert([]);
+PHP;
+
+        $this->assertSame(
+            [],
+            $this->analyze($source),
+        );
+    }
+
+    public function test_query_empty_insert_or_ignore_is_ignored_as_noop(): void
+    {
+        $source = <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+User::query()->insertOrIgnore([]);
+PHP;
+
+        $this->assertSame(
+            [],
+            $this->analyze($source),
+        );
+    }
+
     public function test_non_query_model_static_chain_is_ignored(): void
     {
         $source = <<<'PHP'

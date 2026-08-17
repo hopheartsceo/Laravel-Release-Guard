@@ -289,6 +289,13 @@ final class EloquentUsageAnalyzer
                 true,
             )
         ) {
+            if ($this->isEmptyInsertNoop(
+                $method,
+                $call,
+            )) {
+                return [];
+            }
+
             return [
                 $this->analyzeStaticWrite(
                     call: $call,
@@ -363,6 +370,13 @@ final class EloquentUsageAnalyzer
                 true,
             )
         ) {
+            if ($this->isEmptyInsertNoop(
+                $method,
+                $call,
+            )) {
+                return [];
+            }
+
             return [
                 $this->analyzeMethodWrite(
                     call: $call,
@@ -413,6 +427,24 @@ final class EloquentUsageAnalyzer
                 line: $call->getStartLine(),
             ),
         ];
+    }
+
+    private function isEmptyInsertNoop(
+        string $operation,
+        StaticCall|MethodCall $call,
+    ): bool {
+        if (! in_array(
+            $operation,
+            ['insert', 'insertOrIgnore'],
+            true,
+        )) {
+            return false;
+        }
+
+        $payload = $call->args[0]->value ?? null;
+
+        return $payload instanceof Array_
+            && $payload->items === [];
     }
 
     private function analyzeStaticWrite(
