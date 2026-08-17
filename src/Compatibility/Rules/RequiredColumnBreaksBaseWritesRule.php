@@ -38,7 +38,19 @@ final class RequiredColumnBreaksBaseWritesRule implements CompatibilityRuleInter
                     continue;
                 }
 
-                if ($usage->operation !== 'insert') {
+                if (! in_array(
+                    $usage->operation,
+                    [
+                        'insert',
+                        'insertOrIgnore',
+                        'insertGetId',
+                        'create',
+                        'forceCreate',
+                        'createQuietly',
+                        'forceCreateQuietly',
+                    ],
+                    true,
+                )) {
                     continue;
                 }
 
