@@ -131,6 +131,53 @@ final class EloquentUsageAnalyzer
         'cursorPaginate',
     ];
 
+    /**
+     * Static model calls that are known to return an
+     * Eloquent query builder.
+     *
+     * @var list<string>
+     */
+    private const QUERY_ROOT_STATIC_METHODS = [
+        'query',
+        'newQuery',
+        'newModelQuery',
+        'newQueryWithoutRelationships',
+        'newQueryWithoutScopes',
+        'on',
+        'onWriteConnection',
+        'with',
+        'without',
+        'withOnly',
+        'withoutGlobalScope',
+        'withoutGlobalScopes',
+        'latest',
+        'oldest',
+        'inRandomOrder',
+        'distinct',
+        'limit',
+        'take',
+        'skip',
+        'offset',
+        'has',
+        'orHas',
+        'doesntHave',
+        'orDoesntHave',
+        'whereHas',
+        'orWhereHas',
+        'whereDoesntHave',
+        'orWhereDoesntHave',
+        'withWhereHas',
+        'withCount',
+        'withSum',
+        'withAvg',
+        'withMin',
+        'withMax',
+        'withExists',
+        'withTrashed',
+        'onlyTrashed',
+        'withoutTrashed',
+    ];
+
     private readonly PhpAstParserService $parser;
 
     private readonly NodeFinder $finder;
@@ -690,10 +737,43 @@ final class EloquentUsageAnalyzer
             return null;
         }
 
+        if (! $this->isSupportedQueryRootStaticCall(
+            $current,
+        )) {
+            return null;
+        }
+
         return $this->modelForStaticCall(
             $current,
             $models,
         );
+    }
+
+    private function isSupportedQueryRootStaticCall(
+        StaticCall $call,
+    ): bool {
+        $method = $this->staticMethodName($call);
+
+        if ($method === null) {
+            return false;
+        }
+
+        return in_array(
+            $method,
+            self::QUERY_ROOT_STATIC_METHODS,
+            true,
+        )
+            || in_array(
+                $method,
+                self::FIRST_ARGUMENT_COLUMN_METHODS,
+                true,
+            )
+            || in_array(
+                $method,
+                self::MULTI_COLUMN_METHODS,
+                true,
+            )
+            || $method === 'whereColumn';
     }
 
     private function staticMethodName(

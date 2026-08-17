@@ -159,6 +159,49 @@ PHP;
         );
     }
 
+    public function test_non_query_model_static_chain_is_ignored(): void
+    {
+        $source = <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+User::factory()
+    ->count(3)
+    ->make();
+PHP;
+
+        $this->assertSame(
+            [],
+            $this->analyze($source),
+        );
+    }
+
+    public function test_known_query_root_still_preserves_table_usage(): void
+    {
+        $source = <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+User::query()->count();
+PHP;
+
+        $usages = $this->analyze($source);
+
+        $this->assertCount(1, $usages);
+        $this->assertInstanceOf(
+            TableUsage::class,
+            $usages[0],
+        );
+        $this->assertSame('users', $usages[0]->table);
+        $this->assertSame('count', $usages[0]->operation);
+    }
+
     public function test_unknown_model_table_does_not_create_definite_usage(): void
     {
         $source = <<<'PHP'

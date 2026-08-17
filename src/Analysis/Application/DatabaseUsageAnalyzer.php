@@ -161,11 +161,15 @@ final class DatabaseUsageAnalyzer
                     continue;
                 }
 
-                $usages[] = $this->analyzePayloadWrite(
+                $usage = $this->analyzePayloadWrite(
                     call: $call,
                     operation: $method,
                     file: $file,
                 );
+
+                if ($usage !== null) {
+                    $usages[] = $usage;
+                }
 
                 continue;
             }
@@ -214,12 +218,9 @@ final class DatabaseUsageAnalyzer
         MethodCall $call,
         string $operation,
         string $file,
-    ): WriteUsage {
+    ): ?WriteUsage {
         $table = $this->queryBuilderTable($call);
         $payload = $call->args[0]->value ?? null;
-
-        $columns = null;
-        $reason = null;
 
         if (
             $payload instanceof Array_
@@ -230,8 +231,13 @@ final class DatabaseUsageAnalyzer
                 true,
             )
         ) {
-            $reason = 'empty_insert_noop';
-        } elseif ($payload instanceof Array_) {
+            return null;
+        }
+
+        $columns = null;
+        $reason = null;
+
+        if ($payload instanceof Array_) {
             $columns = $this->literalWriteColumns($payload);
 
             if ($columns === null) {

@@ -242,14 +242,14 @@ PHP;
         $this->assertSame('users', $usages[0]->table);
         $this->assertSame('first', $usages[0]->operation);
     }
-    public function test_empty_insert_is_preserved_as_noop(): void
+    public function test_empty_insert_or_ignore_is_ignored_as_noop(): void
     {
         $source = <<<'PHP'
 <?php
 
 use Illuminate\Support\Facades\DB;
 
-DB::table('users')->insert([]);
+DB::table('users')->insertOrIgnore([]);
 PHP;
 
         $usages = (new DatabaseUsageAnalyzer())->analyze(
@@ -257,18 +257,7 @@ PHP;
             file: 'app/Services/UserWriter.php',
         )->usages();
 
-        $this->assertCount(1, $usages);
-        $this->assertInstanceOf(
-            WriteUsage::class,
-            $usages[0],
-        );
-        $this->assertSame('users', $usages[0]->table);
-        $this->assertSame('insert', $usages[0]->operation);
-        $this->assertNull($usages[0]->columns);
-        $this->assertSame(
-            'empty_insert_noop',
-            $usages[0]->reason,
-        );
+        $this->assertSame([], $usages);
     }
 
 }

@@ -48,7 +48,7 @@ PHP;
         $this->assertSame(5, $usage->line);
     }
 
-    public function test_it_preserves_empty_insert_as_noop(): void
+    public function test_it_ignores_empty_insert_noop(): void
     {
         $source = <<<'PHP'
 <?php
@@ -63,15 +63,9 @@ PHP;
             file: 'app/Services/AuditWriter.php',
         );
 
-        $usages = $snapshot->usages();
-
-        $this->assertCount(1, $usages);
-        $this->assertInstanceOf(WriteUsage::class, $usages[0]);
-        $this->assertSame('audit_logs', $usages[0]->table);
-        $this->assertNull($usages[0]->columns);
         $this->assertSame(
-            'empty_insert_noop',
-            $usages[0]->reason,
+            [],
+            $snapshot->usages(),
         );
     }
 
