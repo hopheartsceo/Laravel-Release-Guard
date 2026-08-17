@@ -159,6 +159,96 @@ PHP;
         );
     }
 
+    public function test_direct_static_update_is_not_treated_as_query_usage(): void
+    {
+        $source = <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+User::update([
+    'status' => 'active',
+]);
+PHP;
+
+        $this->assertSame(
+            [],
+            $this->analyze($source),
+        );
+    }
+
+    public function test_direct_static_delete_is_not_treated_as_query_usage(): void
+    {
+        $source = <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+User::delete();
+PHP;
+
+        $this->assertSame(
+            [],
+            $this->analyze($source),
+        );
+    }
+
+    public function test_query_builder_update_is_still_detected(): void
+    {
+        $source = <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+User::query()->update([
+    'status' => 'active',
+]);
+PHP;
+
+        $usages = $this->analyze($source);
+
+        $this->assertCount(1, $usages);
+        $this->assertInstanceOf(
+            WriteUsage::class,
+            $usages[0],
+        );
+        $this->assertSame('users', $usages[0]->table);
+        $this->assertSame('update', $usages[0]->operation);
+        $this->assertSame(
+            ['status'],
+            $usages[0]->columns,
+        );
+    }
+
+    public function test_query_builder_delete_is_still_detected(): void
+    {
+        $source = <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+User::query()->delete();
+PHP;
+
+        $usages = $this->analyze($source);
+
+        $this->assertCount(1, $usages);
+        $this->assertInstanceOf(
+            TableUsage::class,
+            $usages[0],
+        );
+        $this->assertSame('users', $usages[0]->table);
+        $this->assertSame('delete', $usages[0]->operation);
+    }
+
     public function test_static_empty_insert_is_ignored_as_noop(): void
     {
         $source = <<<'PHP'

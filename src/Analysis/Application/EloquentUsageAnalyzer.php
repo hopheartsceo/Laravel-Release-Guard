@@ -97,6 +97,17 @@ final class EloquentUsageAnalyzer
     ];
 
     /**
+     * Model instance methods that must not be promoted to
+     * Query Builder usage when written as direct static calls.
+     *
+     * @var list<string>
+     */
+    private const DIRECT_STATIC_MODEL_METHODS_TO_IGNORE = [
+        'update',
+        'delete',
+    ];
+
+    /**
      * @var list<string>
      */
     private const UPDATE_WRITE_METHODS = [
@@ -274,6 +285,14 @@ final class EloquentUsageAnalyzer
         $method = $this->staticMethodName($call);
 
         if ($method === null) {
+            return [];
+        }
+
+        if (in_array(
+            $method,
+            self::DIRECT_STATIC_MODEL_METHODS_TO_IGNORE,
+            true,
+        )) {
             return [];
         }
 
