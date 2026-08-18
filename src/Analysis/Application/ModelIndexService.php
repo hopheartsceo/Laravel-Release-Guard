@@ -166,14 +166,14 @@ final class ModelIndexService
                         ) === 'null'
                     )
                 ) {
-                    return ['convention', null];
+                    return ['convention_override', null];
                 }
 
                 return ['unknown', null];
             }
         }
 
-        return ['convention', null];
+        return ['absent', null];
     }
 
     private function hasCustomGetTable(
@@ -311,6 +311,21 @@ final class ModelIndexService
                 'table' => null,
                 'reason' => 'dynamic_table_property',
                 'mode' => 'unknown',
+            ];
+        }
+
+        if (
+            $candidate['tableState']
+            === 'convention_override'
+        ) {
+            return [
+                'table' => Str::snake(
+                    Str::pluralStudly(
+                        $candidate['shortName'],
+                    ),
+                ),
+                'reason' => null,
+                'mode' => 'convention',
             ];
         }
 

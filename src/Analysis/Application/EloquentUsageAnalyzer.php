@@ -56,7 +56,6 @@ final class EloquentUsageAnalyzer
         'orderByDesc',
         'having',
         'orHaving',
-        'groupBy',
     ];
 
     /**
@@ -65,6 +64,7 @@ final class EloquentUsageAnalyzer
     private const MULTI_COLUMN_METHODS = [
         'select',
         'addSelect',
+        'groupBy',
     ];
 
     /**

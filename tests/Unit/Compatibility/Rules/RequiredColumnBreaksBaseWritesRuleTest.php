@@ -106,8 +106,17 @@ final class RequiredColumnBreaksBaseWritesRuleTest extends TestCase
         $this->assertSame([], $findings);
     }
 
-    public function test_unknown_base_insert_payload_is_not_promoted_to_a_definite_blocker(): void
+    public function test_unknown_base_insert_payload_is_warning_unknown(): void
     {
+        $write = new WriteUsage(
+            table: 'users',
+            operation: 'insert',
+            columns: null,
+            reason: 'dynamic_payload',
+            file: 'app/Services/UserCreator.php',
+            line: 18,
+        );
+
         $findings = (new RequiredColumnBreaksBaseWritesRule())->evaluate(
             new SchemaDelta([
                 $this->addedColumn(
@@ -116,18 +125,29 @@ final class RequiredColumnBreaksBaseWritesRuleTest extends TestCase
                 ),
             ]),
             new ApplicationSnapshot([
-                new WriteUsage(
-                    table: 'users',
-                    operation: 'insert',
-                    columns: null,
-                    reason: 'dynamic_payload',
-                    file: 'app/Services/UserCreator.php',
-                    line: 18,
-                ),
+                $write,
             ]),
         );
 
-        $this->assertSame([], $findings);
+        $this->assertCount(1, $findings);
+
+        $finding = $findings[0];
+
+        $this->assertSame('DB005', $finding->code);
+        $this->assertSame(
+            Severity::WARNING,
+            $finding->severity,
+        );
+        $this->assertSame(
+            Confidence::UNKNOWN,
+            $finding->confidence,
+        );
+        $this->assertSame('users', $finding->table);
+        $this->assertSame(
+            'country_code',
+            $finding->column,
+        );
+        $this->assertSame($write, $finding->usage);
     }
 
     public function test_write_to_another_table_does_not_break(): void

@@ -77,6 +77,32 @@ final class DroppedColumnStillReferencedWriteUsageTest extends TestCase
         $this->assertSame([], $findings);
     }
 
+    public function test_eloquent_create_semantics_are_not_promoted_to_definite_db001(): void
+    {
+        $change = new DroppedColumn(
+            table: 'users',
+            column: 'phone',
+            file: 'database/migrations/drop_phone_from_users.php',
+            line: 12,
+        );
+
+        $write = new WriteUsage(
+            table: 'users',
+            operation: 'create',
+            columns: null,
+            reason: 'eloquent_model_create_semantics',
+            file: 'app/Services/UserCreator.php',
+            line: 18,
+        );
+
+        $findings = (new DroppedColumnStillReferencedRule())->evaluate(
+            new SchemaDelta([$change]),
+            new ApplicationSnapshot([$write]),
+        );
+
+        $this->assertSame([], $findings);
+    }
+
     public function test_insert_for_another_table_does_not_trigger_db001(): void
     {
         $change = new DroppedColumn(

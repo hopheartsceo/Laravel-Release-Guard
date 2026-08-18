@@ -68,6 +68,33 @@ PHP;
         );
     }
 
+    public function test_group_by_tracks_all_literal_columns(): void
+    {
+        $source = <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+User::query()
+    ->groupBy('account_id', 'status')
+    ->get();
+PHP;
+
+        $usages = $this->analyze($source);
+
+        $this->assertCount(2, $usages);
+        $this->assertSame(
+            'account_id',
+            $usages[0]->column,
+        );
+        $this->assertSame(
+            'status',
+            $usages[1]->column,
+        );
+    }
+
     public function test_plain_terminal_preserves_table_usage(): void
     {
         $source = <<<'PHP'
@@ -91,7 +118,7 @@ PHP;
         $this->assertSame('first', $usages[0]->operation);
     }
 
-    public function test_create_preserves_table_without_inventing_definite_columns(): void
+    public function test_literal_create_remains_conservative_about_final_columns(): void
     {
         $source = <<<'PHP'
 <?php
@@ -104,6 +131,34 @@ User::create([
     'name' => $name,
     'email' => $email,
 ]);
+PHP;
+
+        $usages = $this->analyze($source);
+
+        $this->assertCount(1, $usages);
+        $this->assertInstanceOf(
+            WriteUsage::class,
+            $usages[0],
+        );
+        $this->assertSame('users', $usages[0]->table);
+        $this->assertSame('create', $usages[0]->operation);
+        $this->assertNull($usages[0]->columns);
+        $this->assertSame(
+            'eloquent_model_create_semantics',
+            $usages[0]->reason,
+        );
+    }
+
+    public function test_dynamic_create_payload_remains_conservative(): void
+    {
+        $source = <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+User::create($request->validated());
 PHP;
 
         $usages = $this->analyze($source);

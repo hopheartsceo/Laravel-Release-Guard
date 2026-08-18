@@ -55,6 +55,22 @@ final class MigrationAnalyzer
         );
 
         foreach ($schemaCalls as $schemaCall) {
+            if ($this->isDbCall(
+                $schemaCall,
+                'statement',
+            )) {
+                $changes[] = new UnanalyzableMigrationOperation(
+                    operation: 'statement',
+                    table: null,
+                    column: null,
+                    reason: 'raw_sql',
+                    file: $file,
+                    line: $schemaCall->getStartLine(),
+                );
+
+                continue;
+            }
+
             if ($this->isSchemaCall($schemaCall, 'table')) {
                 foreach ($this->analyzeSchemaTableCall($schemaCall, $file) as $change) {
                     $changes[] = $change;
@@ -286,6 +302,22 @@ final class MigrationAnalyzer
         }
 
         return $changes;
+    }
+
+    private function isDbCall(
+        StaticCall $call,
+        string $method,
+    ): bool {
+        if (
+            ! $call->class instanceof Name
+            || ! $call->name instanceof Identifier
+        ) {
+            return false;
+        }
+
+        return $call->class->toString()
+                === 'Illuminate\\Support\\Facades\\DB'
+            && $call->name->toString() === $method;
     }
 
     private function isSchemaCall(
