@@ -44,20 +44,16 @@ Confirm GitHub Actions passes for:
 - [ ] CHANGELOG contains the final `0.1.0` release entry.
 - [ ] License and package metadata are correct.
 
-### 4. Package Registry — Blocking
+### 4. Package Registry Preparation — Blocking
 
-Before announcing the release publicly:
+Before tagging the release:
 
 - [ ] Register `hopheartsceo/laravel-release-guard` on Packagist.
 - [ ] Confirm Packagist reads the repository metadata successfully.
 - [ ] Configure automatic Packagist updates from GitHub if available.
 - [ ] Confirm the package is visible under the exact Composer name.
-- [ ] After tagging `v0.1.0`, confirm Packagist detects that stable version.
-- [ ] Test installation in a clean Laravel application using:
 
-```bash
-composer require --dev hopheartsceo/laravel-release-guard:^0.1
-```
+A stable `^0.1` installation cannot be verified until the `v0.1.0` tag exists. That check belongs to post-release verification below.
 
 ### 5. Pre-Tag Verification
 
@@ -119,7 +115,12 @@ The release notes should summarize:
 - [ ] GitHub release points to the expected tag and commit.
 - [ ] GitHub Actions is green for the tagged code.
 - [ ] Packagist shows `v0.1.0`.
-- [ ] Clean Composer installation succeeds.
+- [ ] Clean Composer installation succeeds using:
+
+```bash
+composer require --dev hopheartsceo/laravel-release-guard:^0.1
+```
+
 - [ ] `php artisan release-guard:check --help` works.
 - [ ] A safe fixture exits `0`.
 - [ ] A definite blocker fixture exits `1`.
