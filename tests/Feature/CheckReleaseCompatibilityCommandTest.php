@@ -161,6 +161,23 @@ PHP,
         );
     }
 
+    public function test_invalid_format_returns_exit_code_two(): void
+    {
+        $exitCode = Artisan::call(
+            'release-guard:check',
+            [
+                '--against' => 'HEAD~1',
+                '--format' => 'xml',
+            ],
+        );
+
+        $this->assertSame(2, $exitCode);
+        $this->assertStringContainsString(
+            'Invalid output format. Use console or json.',
+            Artisan::output(),
+        );
+    }
+
     public function test_invalid_revision_returns_exit_code_two(): void
     {
         $exitCode = Artisan::call(
@@ -170,10 +187,52 @@ PHP,
             ],
         );
 
+        $output = Artisan::output();
+
         $this->assertSame(2, $exitCode);
         $this->assertStringContainsString(
-            'Analysis failed:',
+            'Analysis failed: Git operation [rev-parse] failed.',
+            $output,
+        );
+        $this->assertStringNotContainsString(
+            'git rev-parse',
+            $output,
+        );
+        $this->assertStringNotContainsString(
+            $this->repository,
+            $output,
+        );
+    }
+
+    public function test_invalid_revision_json_returns_exit_code_two_with_machine_readable_error(): void
+    {
+        $exitCode = Artisan::call(
+            'release-guard:check',
+            [
+                '--against' => 'revision-that-does-not-exist',
+                '--format' => 'json',
+            ],
+        );
+
+        $payload = json_decode(
             Artisan::output(),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+
+        $this->assertSame(2, $exitCode);
+        $this->assertSame(
+            'error',
+            $payload['status'],
+        );
+        $this->assertSame(
+            'Analysis failed: Git operation [rev-parse] failed.',
+            $payload['error'],
+        );
+        $this->assertStringNotContainsString(
+            $this->repository,
+            $payload['error'],
         );
     }
 
