@@ -43,7 +43,7 @@
 
 ## Test-First Requirements
 
-- [x] CHK022 Does the spec require failing regression tests before implementation for positive fresh-instance cases, loaded-model negatives, ambiguous-provenance negatives, `WARNING` / `UNKNOWN` exit-0 behavior, and v0.1 corpus preservation? [Completeness, Spec §FR-011]
+- [x] CHK022 Does the spec distinguish that new broadened behavior starts RED, already-safe conservative boundaries are locked by pre-implementation characterization/regression tests, and both groups exist before production changes? [Completeness, Spec §FR-011]
 - [x] CHK023 Are test-first expectations written as requirements on the eventual implementation workflow rather than as hidden architecture requirements? [Clarity, Spec §FR-011, Spec §FR-012]
 - [x] CHK024 Are test coverage requirements sufficient to prove that `save()` alone does not become a fresh-instance DB005 finding when provenance is ambiguous? [Coverage, Spec §FR-007, Spec §FR-011, Spec §SC-003]
 

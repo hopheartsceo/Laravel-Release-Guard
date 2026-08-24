@@ -8,7 +8,7 @@
 
 ## Test-First Validation Sequence
 
-1. Add failing analyzer and DB005 rule tests before production changes:
+1. Add analyzer RED tests, analyzer baseline safety characterization tests, and the DB005 RED rule test before production changes:
 
 ```bash
 vendor/bin/phpunit tests/Unit/Analysis/Application/EloquentUsageAnalyzerTest.php
@@ -16,7 +16,7 @@ vendor/bin/phpunit tests/Unit/Compatibility/Rules/RequiredColumnBreaksBaseWrites
 vendor/bin/phpunit tests/Unit/Compatibility/Rules/RequiredColumnBreaksBaseWritesInsertVariantsTest.php
 ```
 
-Expected initial result: new tests fail because fresh-instance `save()` is not yet detected, source-order provenance is not yet implemented, and DB005 does not yet recognize `eloquent_fresh_save`.
+Expected initial result: positive fresh-save analyzer tests fail for missing feature behavior, and the DB005 `eloquent_fresh_save` classification test fails because DB005 does not yet recognize that operation. Loaded, ambiguous, unsupported reassignment, future-evidence, unsafe control-flow, and exclusion safety tests pass on current v0.1 behavior where applicable; do not manufacture failures for these baseline safety tests.
 
 2. Implement minimal analyzer and DB005 behavior, then rerun the focused unit tests:
 
@@ -26,7 +26,7 @@ vendor/bin/phpunit tests/Unit/Compatibility/Rules/RequiredColumnBreaksBaseWrites
 vendor/bin/phpunit tests/Unit/Compatibility/Rules/RequiredColumnBreaksBaseWritesInsertVariantsTest.php
 ```
 
-Expected result: analyzer tests show supported fresh `save()` emits `WriteUsage` with `operation: eloquent_fresh_save`, `columns: null`, and `reason: eloquent_fresh_save_semantics`; only ordered evidence before the `save()` is considered; loaded, ambiguous, unsupported reassignment, future-evidence, and unsafe control-flow cases emit no fresh-save write usage; DB005 classifies fresh-save evidence as `WARNING` / `UNKNOWN`.
+Expected result: analyzer RED tests now pass because supported fresh `save()` emits `WriteUsage` with `operation: eloquent_fresh_save`, `columns: null`, and `reason: eloquent_fresh_save_semantics`; baseline safety tests continue passing because only ordered evidence before the `save()` is considered and loaded, ambiguous, unsupported reassignment, future-evidence, unsafe control-flow, and exclusion cases emit no fresh-save write usage; DB005 classifies fresh-save evidence as `WARNING` / `UNKNOWN`.
 
 3. Add and run integration coverage:
 

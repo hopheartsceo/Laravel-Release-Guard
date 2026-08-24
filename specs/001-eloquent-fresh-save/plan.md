@@ -34,7 +34,7 @@ Broaden DB005 coverage so supported fresh-instance Eloquent `save()` paths are r
 
 - **Evidence Before Certainty**: PASS. Fresh `save()` cannot prove final persisted columns because Eloquent runtime behavior may alter inserts, and fresh provenance is accepted only when ordered static evidence appears before the `save()`, so DB005 must emit `WARNING` / `UNKNOWN`, not `BLOCKER` / `DEFINITE`.
 - **v0.1 Compatibility Baseline**: PASS. Plan preserves the v0.1.0 baseline at `80bd17da2ef34b511689c287a13944b8da6ea1a7`, including DB001-DB006 codes, JSON shape, console output, config, exit-code meanings, Query Builder behavior, and existing Eloquent `create()` behavior.
-- **Test-First Compatibility Rules**: PASS. Implementation phases begin with failing analyzer/domain tests before production changes, including source-order, reassignment, loaded, ambiguous, and boundary-negative cases, then DB005 integration and public-contract regression tests.
+- **Test-First Compatibility Rules**: PASS. Implementation phases begin with RED analyzer tests for missing broadened fresh-save behavior (T001-T005, T011), GREEN baseline safety characterization tests for already-safe conservative negative boundaries (T006-T010, T012), and a separate RED DB005 classification test before DB005 rule changes (T013).
 - **Public Contracts Are Stable**: PASS. No public output, JSON, configuration, severity/confidence vocabulary, package metadata, or exit-code changes are planned.
 - **Narrow Static Analysis**: PASS. The design reuses existing parser, model index, application snapshot, pipeline, and DB005 rule; it requires one ordered same-file receiver-provenance pass rather than broad data-flow or CFG analysis, and excludes aliases, helper-mediated behavior, arbitrary control-flow inference, DI/container resolution, dynamic model classes, factories, relationship saves, `saveOrFail()`, and `push()`.
 
@@ -99,7 +99,7 @@ Rationale:
 - Cohesion: The analyzer already maps known Eloquent models to `ColumnUsage`, `TableUsage`, and `WriteUsage`, and already owns the `MODEL_CREATE_METHODS` conservative-write semantics.
 - Pipeline fit: `ReleaseGuardAnalysisPipeline` already builds `ModelIndex` once and runs `EloquentUsageAnalyzer` per base application file, so no new pipeline wiring or service-provider contract is required for the narrow scope.
 - False-positive risk: Keeping the logic inside the Eloquent analyzer allows instance `save()` recognition to reuse the existing known-model/table checks and avoid treating generic method calls as ORM writes.
-- Testability: Existing `EloquentUsageAnalyzerTest` can start with failing unit cases for recognized, loaded, ambiguous, and excluded `save()` patterns. Existing DB005 rule tests can pin the intended severity/confidence branch.
+- Testability: Existing `EloquentUsageAnalyzerTest` can start with RED unit cases for recognized fresh `save()` patterns and GREEN baseline characterization cases for loaded, ambiguous, ordering, reassignment, control-flow, and excluded `save()` boundaries. Existing DB005 rule tests can pin the intended severity/confidence branch with a RED classification test.
 - Avoiding unnecessary architecture: A separate public analyzer would add constructor dependencies, pipeline orchestration, and service-provider considerations without a distinct domain boundary for this feature.
 
 **Rejected**: Introduce a focused `EloquentInstanceWriteAnalyzer`.
@@ -192,21 +192,23 @@ The receiver-state table must be updated in source order with these semantics:
 
 ## Implementation Phases
 
-### Phase A: Failing Analyzer/Domain Tests
+### Phase A: RED Analyzer Tests and Baseline Safety Characterization
 
-- Add failing analyzer tests proving fresh construction followed by direct `save()` emits fresh-save evidence.
-- Add failing analyzer tests for literal constructor attributes plus `save()`.
-- Add failing analyzer tests for empty constructor plus same-receiver property writes plus `save()`.
-- Add failing analyzer tests for same-receiver literal attribute-array writes plus `save()`.
-- Add failing analyzer tests for constructor attributes plus additional supported assignments.
-- Add failing analyzer tests proving fresh construction followed by unsupported reassignment and then `save()` emits no fresh-save evidence.
-- Add failing analyzer tests proving loaded model plus `save()` does not emit fresh-save write usage.
-- Add failing analyzer tests proving ambiguous origin plus `save()` emits no fresh-save write usage.
-- Add failing analyzer tests proving `save()` before a later fresh construction is not classified using future evidence.
-- Add failing analyzer tests proving fresh construction on an unsupported or conditional path with `save()` outside the safe straight-line evidence boundary emits no fresh-save evidence.
-- Add failing analyzer tests proving fresh construction plus supported same-receiver assignments plus `save()` in valid source order emits exactly the intended fresh-save evidence.
-- Add failing analyzer tests proving helper/alias/dynamic/factory/relationship/saveOrFail/push cases emit no fresh-save write usage.
-- Add DB005 unit test proving `operation: eloquent_fresh_save`, `columns: null`, and `reason: eloquent_fresh_save_semantics` produce `WARNING` / `UNKNOWN`.
+- Add RED analyzer tests proving fresh construction followed by direct `save()` emits fresh-save evidence.
+- Add RED analyzer tests for literal constructor attributes plus `save()`.
+- Add RED analyzer tests for empty constructor plus same-receiver property writes plus `save()`.
+- Add RED analyzer tests for same-receiver literal attribute-array writes plus `save()`.
+- Add RED analyzer tests for constructor attributes plus additional supported assignments.
+- Add GREEN baseline safety characterization tests proving fresh construction followed by unsupported reassignment and then `save()` emits no fresh-save evidence.
+- Add GREEN baseline safety characterization tests proving loaded model plus `save()` does not emit fresh-save write usage.
+- Add GREEN baseline safety characterization tests proving ambiguous origin plus `save()` emits no fresh-save write usage.
+- Add GREEN baseline safety characterization tests proving `save()` before a later fresh construction is not classified using future evidence.
+- Add GREEN baseline safety characterization tests proving fresh construction on an unsupported or conditional path with `save()` outside the safe straight-line evidence boundary emits no fresh-save evidence.
+- Add RED analyzer tests proving fresh construction plus supported same-receiver assignments plus `save()` in valid source order emits exactly the intended fresh-save evidence.
+- Add GREEN baseline safety characterization tests proving helper/alias/dynamic/factory/relationship/saveOrFail/push cases emit no fresh-save write usage.
+- Add RED DB005 unit test proving `operation: eloquent_fresh_save`, `columns: null`, and `reason: eloquent_fresh_save_semantics` produce `WARNING` / `UNKNOWN`.
+
+Task mapping: analyzer RED tests are T001-T005 and T011 before T014; analyzer GREEN baseline safety characterization tests are T006-T010 and T012 before T014; DB005 RED classification test is T013 before T021 and does not block T014.
 
 ### Phase B: Minimal Analyzer Behavior
 
@@ -240,7 +242,7 @@ The receiver-state table must be updated in source order with these semantics:
 
 - **Evidence Before Certainty**: PASS. Fresh-save findings are intentionally unknown-confidence warnings and are emitted only when ordered same-receiver static evidence precedes the `save()` inside the supported boundary.
 - **v0.1 Compatibility Baseline**: PASS. Existing behavior is pinned by v0.1 corpus and explicit Query Builder/Eloquent-create regression tests.
-- **Test-First Compatibility Rules**: PASS. Phase A starts with failing tests for positive source-order evidence, reassignment downgrades, loaded/ambiguous negatives, future-evidence negatives, unsupported-boundary negatives, and DB005 representation before production changes; Phase D protects public contracts.
+- **Test-First Compatibility Rules**: PASS. Phase A starts with RED tests for missing broadened analyzer behavior (T001-T005, T011) and DB005 representation (T013), while reassignment, loaded/ambiguous negatives, future-evidence negatives, unsupported-boundary negatives, and exclusions (T006-T010, T012) are captured before production changes as GREEN baseline safety characterization tests; Phase D protects public contracts.
 - **Public Contracts Are Stable**: PASS. No public shape, code, config, vocabulary, package, or exit-code changes are designed.
 - **Narrow Static Analysis**: PASS. The evidence boundary is local, same-receiver, ordered, AST-only, and straight-line; it excludes broad ORM/data-flow inference and explicitly avoids CFG construction.
 
