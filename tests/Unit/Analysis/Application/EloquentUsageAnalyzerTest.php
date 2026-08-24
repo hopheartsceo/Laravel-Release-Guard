@@ -383,6 +383,359 @@ PHP;
         $this->assertSame('count', $usages[0]->operation);
     }
 
+    public function test_fresh_known_model_construction_then_direct_save_emits_fresh_save_usage(): void
+    {
+        $source = <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+$user = new User();
+$user->save();
+PHP;
+
+        $freshSaveUsages = $this->freshSaveUsages($this->analyze($source));
+
+        $this->assertCount(1, $freshSaveUsages);
+        $this->assertFreshSaveUsage($freshSaveUsages[0]);
+    }
+
+    public function test_literal_constructor_attributes_then_save_emit_unknown_column_fresh_save_usage(): void
+    {
+        $source = <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+$user = new User([
+    'name' => $name,
+    'email' => $email,
+]);
+
+$user->save();
+PHP;
+
+        $freshSaveUsages = $this->freshSaveUsages($this->analyze($source));
+
+        $this->assertCount(1, $freshSaveUsages);
+        $this->assertFreshSaveUsage($freshSaveUsages[0]);
+        $this->assertNull($freshSaveUsages[0]->columns);
+        $this->assertSame(
+            'eloquent_fresh_save_semantics',
+            $freshSaveUsages[0]->reason,
+        );
+    }
+
+    public function test_empty_constructor_property_assignment_then_save_emits_fresh_save_usage(): void
+    {
+        $source = <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+$user = new User();
+$user->email = $email;
+$user->save();
+PHP;
+
+        $freshSaveUsages = $this->freshSaveUsages($this->analyze($source));
+
+        $this->assertCount(1, $freshSaveUsages);
+        $this->assertFreshSaveUsage($freshSaveUsages[0]);
+    }
+
+    public function test_empty_constructor_attribute_array_assignment_then_save_emits_fresh_save_usage(): void
+    {
+        $source = <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+$user = new User();
+$user['email'] = $email;
+$user->save();
+PHP;
+
+        $freshSaveUsages = $this->freshSaveUsages($this->analyze($source));
+
+        $this->assertCount(1, $freshSaveUsages);
+        $this->assertFreshSaveUsage($freshSaveUsages[0]);
+    }
+
+    public function test_constructor_payload_plus_supported_assignments_then_save_emits_exact_fresh_save_usage(): void
+    {
+        $source = <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+$user = new User([
+    'name' => $name,
+]);
+
+$user->email = $email;
+$user['timezone'] = 'UTC';
+$user->save();
+PHP;
+
+        $freshSaveUsages = $this->freshSaveUsages($this->analyze($source));
+
+        $this->assertCount(1, $freshSaveUsages);
+        $this->assertFreshSaveUsage($freshSaveUsages[0]);
+    }
+
+    public function test_fresh_construction_then_unsupported_reassignment_has_no_fresh_save_usage(): void
+    {
+        $source = <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+$user = new User();
+$user = $this->resolveUser();
+$user->save();
+PHP;
+
+        $this->assertNoFreshSaveUsages($this->analyze($source));
+    }
+
+    public function test_loaded_retrieval_shapes_then_assignment_have_no_fresh_save_usage(): void
+    {
+        $directRetrieval = <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+$user = User::findOrFail($id);
+$user->email = $email;
+$user->save();
+PHP;
+
+        $queryRootRetrieval = <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+$user = User::query()
+    ->where('email', $email)
+    ->first();
+
+$user['name'] = $name;
+$user->save();
+PHP;
+
+        $this->assertNoFreshSaveUsages($this->analyze($directRetrieval));
+        $this->assertNoFreshSaveUsages($this->analyze($queryRootRetrieval));
+    }
+
+    public function test_ambiguous_helper_and_dynamic_origins_have_no_fresh_save_usage(): void
+    {
+        $helperOrigin = <<<'PHP'
+<?php
+
+namespace App\Services;
+
+$user = makeUser();
+$user->save();
+PHP;
+
+        $dynamicOrigin = <<<'PHP'
+<?php
+
+namespace App\Services;
+
+$class = $this->modelClass();
+$user = new $class();
+$user->save();
+PHP;
+
+        $this->assertNoFreshSaveUsages($this->analyze($helperOrigin));
+        $this->assertNoFreshSaveUsages($this->analyze($dynamicOrigin));
+    }
+
+    public function test_save_before_later_fresh_construction_has_no_future_derived_fresh_save_usage(): void
+    {
+        $source = <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+$user->save();
+
+$user = new User();
+PHP;
+
+        $this->assertNoFreshSaveUsages($this->analyze($source));
+    }
+
+    public function test_fresh_construction_inside_conditional_does_not_leak_to_later_save(): void
+    {
+        $source = <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+if ($shouldCreate) {
+    $user = new User();
+}
+
+$user->save();
+PHP;
+
+        $this->assertNoFreshSaveUsages($this->analyze($source));
+    }
+
+    public function test_valid_ordered_fresh_save_usage_carries_exact_source_metadata(): void
+    {
+        $source = <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+final class RegistersUser
+{
+    public function handle(string $email): void
+    {
+        $user = new User([
+            'email' => $email,
+        ]);
+        $user->name = 'Taylor';
+        $user['timezone'] = 'UTC';
+        $user->save();
+    }
+}
+PHP;
+
+        $freshSaveUsages = $this->freshSaveUsages($this->analyze($source));
+
+        $this->assertCount(1, $freshSaveUsages);
+        $this->assertFreshSaveUsage($freshSaveUsages[0], line: 18);
+        $this->assertSame('app/Services/UserService.php', $freshSaveUsages[0]->file);
+    }
+
+    public function test_explicitly_excluded_instance_save_shapes_have_no_fresh_save_usage(): void
+    {
+        $sources = [
+            'arbitrary receiver alias' => <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+$user = new User();
+$alias = $user;
+$alias->save();
+PHP,
+            'helper-created model' => <<<'PHP'
+<?php
+
+namespace App\Services;
+
+$user = createUserModel();
+$user->save();
+PHP,
+            'factory' => <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+$user = User::factory()->make();
+$user->save();
+PHP,
+            'relationship-derived model' => <<<'PHP'
+<?php
+
+namespace App\Services;
+
+$user = $account->users()->make();
+$user->save();
+PHP,
+            'dynamic model class' => <<<'PHP'
+<?php
+
+namespace App\Services;
+
+$modelClass = $this->modelClass;
+$user = new $modelClass();
+$user->save();
+PHP,
+            'dependency-injected receiver' => <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+function persist(User $user): void
+{
+    $user->save();
+}
+PHP,
+            'container-resolved receiver' => <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+$user = app(User::class);
+$user->save();
+PHP,
+            'saveOrFail' => <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+$user = new User();
+$user->saveOrFail();
+PHP,
+            'push' => <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+$user = new User();
+$user->push();
+PHP,
+        ];
+
+        foreach ($sources as $scenario => $source) {
+            $this->assertNoFreshSaveUsages(
+                $this->analyze($source),
+                $scenario,
+            );
+        }
+    }
+
     public function test_unknown_model_table_does_not_create_definite_usage(): void
     {
         $source = <<<'PHP'
@@ -456,5 +809,49 @@ PHP;
                 models: $models,
             )
             ->usages();
+    }
+
+    /**
+     * @param list<object> $usages
+     * @return list<WriteUsage>
+     */
+    private function freshSaveUsages(array $usages): array
+    {
+        return array_values(
+            array_filter(
+                $usages,
+                static fn (object $usage): bool => $usage instanceof WriteUsage
+                    && $usage->operation === 'eloquent_fresh_save',
+            ),
+        );
+    }
+
+    private function assertFreshSaveUsage(
+        WriteUsage $usage,
+        int $line = 8,
+    ): void {
+        $this->assertSame('users', $usage->table);
+        $this->assertSame('eloquent_fresh_save', $usage->operation);
+        $this->assertNull($usage->columns);
+        $this->assertSame(
+            'eloquent_fresh_save_semantics',
+            $usage->reason,
+        );
+        $this->assertSame('app/Services/UserService.php', $usage->file);
+        $this->assertSame($line, $usage->line);
+    }
+
+    /**
+     * @param list<object> $usages
+     */
+    private function assertNoFreshSaveUsages(
+        array $usages,
+        string $message = '',
+    ): void {
+        $this->assertSame(
+            [],
+            $this->freshSaveUsages($usages),
+            $message,
+        );
     }
 }
