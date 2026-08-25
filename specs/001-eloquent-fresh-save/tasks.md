@@ -80,9 +80,9 @@ description: "Task list for Eloquent Fresh Save DB005 Coverage"
 
 ### Implementation for DB005
 
-- [ ] T021 [US1] Add `eloquent_fresh_save` to the Eloquent uncertain branch in `src/Compatibility/Rules/RequiredColumnBreaksBaseWritesRule.php` (depends on T013 and T019); done when fresh-save `columns: null` produces existing DB005 `WARNING` / `UNKNOWN` vocabulary.
-- [ ] T022 [US1] Protect Query Builder definite insert classification in `tests/Unit/Compatibility/Rules/RequiredColumnBreaksBaseWritesInsertVariantsTest.php` (depends on T021); done when `insert` and `insertGetId` known-column cases remain `BLOCKER` / `DEFINITE` and fresh-save never enters that branch.
-- [ ] T023 [US1] Run focused DB005 verification with `vendor/bin/phpunit tests/Unit/Compatibility/Rules/RequiredColumnBreaksBaseWritesRuleTest.php tests/Unit/Compatibility/Rules/RequiredColumnBreaksBaseWritesInsertVariantsTest.php` (depends on T021-T022); done when both DB005 rule test files pass.
+- [X] T021 [US1] Add `eloquent_fresh_save` to the Eloquent uncertain branch in `src/Compatibility/Rules/RequiredColumnBreaksBaseWritesRule.php` (depends on T013 and T019); done when fresh-save `columns: null` produces existing DB005 `WARNING` / `UNKNOWN` vocabulary.
+- [X] T022 [US1] Protect Query Builder definite insert classification in `tests/Unit/Compatibility/Rules/RequiredColumnBreaksBaseWritesInsertVariantsTest.php` (depends on T021); done when `insert` and `insertGetId` known-column cases remain `BLOCKER` / `DEFINITE` and fresh-save never enters that branch.
+- [X] T023 [US1] Run focused DB005 verification with `vendor/bin/phpunit tests/Unit/Compatibility/Rules/RequiredColumnBreaksBaseWritesRuleTest.php tests/Unit/Compatibility/Rules/RequiredColumnBreaksBaseWritesInsertVariantsTest.php` (depends on T021-T022); done when both DB005 rule test files pass.
 
 **Checkpoint**: Fresh-save downstream representation is recognized by DB005 as non-blocking uncertain Eloquent evidence only.
 
