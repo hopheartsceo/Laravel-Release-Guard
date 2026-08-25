@@ -27,6 +27,64 @@ final class RequiredColumnBreaksBaseWritesInsertVariantsTest extends TestCase
         $this->assertSame('DB005', $findings[0]->code);
     }
 
+
+    public function test_insert_missing_required_column_remains_blocker_definite(): void
+    {
+        $findings = $this->evaluate(
+            operation: 'insert',
+            columns: ['name', 'email'],
+        );
+
+        $this->assertCount(1, $findings);
+        $this->assertSame('DB005', $findings[0]->code);
+        $this->assertSame(
+            Severity::BLOCKER,
+            $findings[0]->severity,
+        );
+        $this->assertSame(
+            Confidence::DEFINITE,
+            $findings[0]->confidence,
+        );
+    }
+
+    public function test_insert_get_id_missing_required_column_remains_blocker_definite(): void
+    {
+        $findings = $this->evaluate(
+            operation: 'insertGetId',
+            columns: ['name', 'email'],
+        );
+
+        $this->assertCount(1, $findings);
+        $this->assertSame('DB005', $findings[0]->code);
+        $this->assertSame(
+            Severity::BLOCKER,
+            $findings[0]->severity,
+        );
+        $this->assertSame(
+            Confidence::DEFINITE,
+            $findings[0]->confidence,
+        );
+    }
+
+    public function test_fresh_save_never_uses_definite_query_builder_classification(): void
+    {
+        $findings = $this->evaluate(
+            operation: 'eloquent_fresh_save',
+            columns: null,
+        );
+
+        $this->assertCount(1, $findings);
+        $this->assertSame('DB005', $findings[0]->code);
+        $this->assertNotSame(
+            Severity::BLOCKER,
+            $findings[0]->severity,
+        );
+        $this->assertNotSame(
+            Confidence::DEFINITE,
+            $findings[0]->confidence,
+        );
+    }
+
     #[DataProvider('eloquentCreateOperations')]
     public function test_eloquent_create_operations_are_warning_unknown(
         string $operation,

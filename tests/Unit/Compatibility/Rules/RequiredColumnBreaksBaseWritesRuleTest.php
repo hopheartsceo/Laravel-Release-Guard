@@ -174,6 +174,43 @@ final class RequiredColumnBreaksBaseWritesRuleTest extends TestCase
         $this->assertSame([], $findings);
     }
 
+    public function test_fresh_eloquent_save_with_unknown_columns_is_warning_unknown_not_definite(): void
+    {
+        $write = new WriteUsage(
+            table: 'users',
+            operation: 'eloquent_fresh_save',
+            columns: null,
+            reason: 'eloquent_fresh_save_semantics',
+            file: 'app/Services/UserCreator.php',
+            line: 18,
+        );
+
+        $findings = (new RequiredColumnBreaksBaseWritesRule())->evaluate(
+            new SchemaDelta([
+                $this->addedColumn(
+                    nullable: false,
+                    hasDefault: false,
+                ),
+            ]),
+            new ApplicationSnapshot([
+                $write,
+            ]),
+        );
+
+        $this->assertCount(1, $findings);
+
+        $finding = $findings[0];
+
+        $this->assertSame('DB005', $finding->code);
+        $this->assertSame(Severity::WARNING, $finding->severity);
+        $this->assertSame(Confidence::UNKNOWN, $finding->confidence);
+        $this->assertNotSame(Severity::BLOCKER, $finding->severity);
+        $this->assertNotSame(Confidence::DEFINITE, $finding->confidence);
+        $this->assertSame('users', $finding->table);
+        $this->assertSame('country_code', $finding->column);
+        $this->assertSame($write, $finding->usage);
+    }
+
     private function addedColumn(
         bool $nullable,
         bool $hasDefault,

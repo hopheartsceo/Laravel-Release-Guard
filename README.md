@@ -92,7 +92,7 @@ Laravel Release Guard analyzes the previous application revision directly from G
 
 Candidate migrations come from changes in the current working tree relative to the selected base revision, including supported untracked migration files.
 
-## v0.1 Database Rules
+## Database Rules
 
 | Code | Rule | Purpose |
 |---|---|---|
@@ -123,7 +123,7 @@ Every finding has two important dimensions:
 
 Laravel Release Guard prefers `UNKNOWN` over fabricated certainty.
 
-Only a `BLOCKER` with `DEFINITE` confidence fails compatibility CI in v0.1.
+Only a `BLOCKER` with `DEFINITE` confidence fails compatibility CI.
 
 ## Exit Codes
 
@@ -260,15 +260,30 @@ Mass-assignment configuration, model defaults, events, mutators, and other model
 
 For cases like this, Laravel Release Guard intentionally reports uncertainty instead of promoting incomplete evidence to a definite blocker.
 
+For `DB005`, supported write paths include direct Query Builder `insert` / `insertGetId`, the existing Eloquent `create` family, and a narrow fresh-instance Eloquent `save()` pattern:
+
+```php
+$user = new User([
+    'name' => $name,
+    'email' => $email,
+]);
+
+$user->save();
+```
+
+Fresh-instance `save()` coverage is intentionally limited to direct construction of a known model, optional supported assignments on the same receiver, and a later direct `save()` on that receiver. It is reported as `WARNING` / `UNKNOWN`, remains non-blocking by itself, and does not change Query Builder insert classification.
+
+Loaded-model saves, ambiguous receiver provenance, aliases, helper-created models, factories, relationship saves, dependency injection, container resolution, dynamic model classes, `saveOrFail()`, and `push()` are not treated as fresh inserts.
+
 The same principle applies to dynamic table names, dynamic column names, dynamic write payloads, and unsupported raw migration operations.
 
-## Scope of v0.1
+## Analysis Scope
 
-The first release focuses on database compatibility during rolling and zero-downtime Laravel deployments.
+Laravel Release Guard focuses on database compatibility during rolling and zero-downtime Laravel deployments.
 
 It statically analyzes supported Laravel migration operations and supported application database usage patterns.
 
-v0.1 is not intended to prove every possible deployment risk.
+It is not intended to prove every possible deployment risk.
 
 In particular, it does not execute application code or migrations, and it does not claim to model every runtime, infrastructure, operational, locking, data-backfill, queue, cache, or serialized-payload compatibility concern.
 

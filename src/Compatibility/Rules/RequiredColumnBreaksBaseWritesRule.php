@@ -48,6 +48,7 @@ final class RequiredColumnBreaksBaseWritesRule implements CompatibilityRuleInter
                     'forceCreate',
                     'createQuietly',
                     'forceCreateQuietly',
+                    'eloquent_fresh_save',
                 ];
 
                 if (

@@ -4,6 +4,21 @@ All notable changes to Laravel Release Guard will be documented in this file.
 
 The project follows Semantic Versioning.
 
+## [0.2.0]
+
+### Added
+
+- `DB005` now recognizes supported direct fresh-instance Eloquent `save()` paths as possible insert risks when a candidate migration adds a required column without a database default.
+- Fresh-instance `save()` findings are conservatively classified as `WARNING` / `UNKNOWN`; they remain non-blocking and do not fail CI by themselves.
+- Loaded-model `save()` paths and ambiguous or unsupported receiver provenance are protected from being upgraded to fresh-instance insert evidence.
+
+### Compatibility
+
+- Existing Query Builder `insert` and `insertGetId` behavior is unchanged.
+- Existing Eloquent `create`, `forceCreate`, `createQuietly`, and `forceCreateQuietly` behavior is unchanged.
+- JSON, console, configuration, rule-code, severity, confidence, and exit-code public contracts remain compatible with v0.1.
+- Fresh-instance `save()` coverage is intentionally narrow static analysis, not universal Eloquent `save()` detection or general Eloquent dataflow.
+
 ## [0.1.0] - 2026-08-18
 
 ### Added
