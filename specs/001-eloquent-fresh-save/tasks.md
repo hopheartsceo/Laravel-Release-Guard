@@ -122,15 +122,15 @@ description: "Task list for Eloquent Fresh Save DB005 Coverage"
 
 ### Validation Tasks
 
-- [ ] T034 [US3] Run v0.1 corpus verification with `vendor/bin/phpunit tests/Integration/V01ValidationCorpusTest.php` (depends on T024-T033); done when all 24 canonical scenarios preserve existing pass, block, and unknown outcomes.
-- [ ] T035 [P] [US1] Run focused analyzer tests with `vendor/bin/phpunit tests/Unit/Analysis/Application/EloquentUsageAnalyzerTest.php` (depends on T020); done when the analyzer suite passes after integration changes.
-- [ ] T036 [P] [US1] Run focused DB005 tests with `vendor/bin/phpunit tests/Unit/Compatibility/Rules/RequiredColumnBreaksBaseWritesRuleTest.php tests/Unit/Compatibility/Rules/RequiredColumnBreaksBaseWritesInsertVariantsTest.php` (depends on T023); done when DB005 fresh-save and Query Builder classifications pass together.
-- [ ] T037 [US1] Run Eloquent integration tests with `vendor/bin/phpunit tests/Integration/EloquentCompatibilityScenariosTest.php tests/Integration/EloquentReleaseGuardAnalysisPipelineTest.php` (depends on T024-T028); done when fresh, loaded, ambiguous, and existing Eloquent create paths pass.
-- [ ] T038 [US1] Run command and public-contract tests with `vendor/bin/phpunit tests/Feature/CheckReleaseCompatibilityCommandTest.php tests/Feature/CompatibilityEngineRegistrationTest.php tests/Feature/RequiredColumnBreaksBaseWritesIntegrationTest.php` (depends on T029-T033); done when exit codes, JSON, console, config, DB001-DB006, and Query Builder regressions pass.
-- [ ] T039 Run full repository test suite with `composer test` using scripts in `composer.json` (depends on T034-T038); done when all tests pass.
-- [ ] T040 Run Composer metadata validation with `composer validate --strict` against `composer.json` (depends on T039); done when Composer reports strict validation success.
-- [ ] T041 Verify Laravel 10-13 support-matrix status in `.github/workflows/tests.yml` as a final release gate (depends on T039-T040); done when matrix status is captured without treating local inability to run the whole matrix as an implementation prerequisite.
-- [ ] T042 [P] Review release documentation impact in `README.md` and `CHANGELOG.md` after behavior is verified (depends on T039-T041); done when maintainers decide whether documentation updates are needed for v0.2 without blocking implementation prerequisites.
+- [X] T034 [US3] Run v0.1 corpus verification with `vendor/bin/phpunit tests/Integration/V01ValidationCorpusTest.php` (depends on T024-T033); done when all 24 canonical scenarios preserve existing pass, block, and unknown outcomes.
+- [X] T035 [P] [US1] Run focused analyzer tests with `vendor/bin/phpunit tests/Unit/Analysis/Application/EloquentUsageAnalyzerTest.php` (depends on T020); done when the analyzer suite passes after integration changes.
+- [X] T036 [P] [US1] Run focused DB005 tests with `vendor/bin/phpunit tests/Unit/Compatibility/Rules/RequiredColumnBreaksBaseWritesRuleTest.php tests/Unit/Compatibility/Rules/RequiredColumnBreaksBaseWritesInsertVariantsTest.php` (depends on T023); done when DB005 fresh-save and Query Builder classifications pass together.
+- [X] T037 [US1] Run Eloquent integration tests with `vendor/bin/phpunit tests/Integration/EloquentCompatibilityScenariosTest.php tests/Integration/EloquentReleaseGuardAnalysisPipelineTest.php` (depends on T024-T028); done when fresh, loaded, ambiguous, and existing Eloquent create paths pass.
+- [X] T038 [US1] Run command and public-contract tests with `vendor/bin/phpunit tests/Feature/CheckReleaseCompatibilityCommandTest.php tests/Feature/CompatibilityEngineRegistrationTest.php tests/Feature/RequiredColumnBreaksBaseWritesIntegrationTest.php` (depends on T029-T033); done when exit codes, JSON, console, config, DB001-DB006, and Query Builder regressions pass.
+- [X] T039 Run full repository test suite with `composer test` using scripts in `composer.json` (depends on T034-T038); done when all tests pass.
+- [X] T040 Run Composer metadata validation with `composer validate --strict` against `composer.json` (depends on T039); done when Composer reports strict validation success.
+- [X] T041 Verify Laravel 10-13 support-matrix status in `.github/workflows/tests.yml` as a final release gate (depends on T039-T040); done when matrix status is captured without treating local inability to run the whole matrix as an implementation prerequisite.
+- [X] T042 [P] Review release documentation impact in `README.md` and `CHANGELOG.md` after behavior is verified (depends on T039-T041); done when maintainers decide whether documentation updates are needed for v0.2 without blocking implementation prerequisites.
 
 **Checkpoint**: Feature behavior is verified, public contracts are stable, and release gates are identified.
 
