@@ -11,6 +11,9 @@ use Hopheartsceo\ReleaseGuard\Compatibility\CompatibilityEngine;
 use Hopheartsceo\ReleaseGuard\Compatibility\Rules\DroppedColumnStillReferencedRule;
 use Hopheartsceo\ReleaseGuard\Compatibility\Rules\DroppedTableStillReferencedRule;
 use Hopheartsceo\ReleaseGuard\Compatibility\Rules\RequiredColumnBreaksBaseWritesRule;
+use Hopheartsceo\ReleaseGuard\Domain\Finding\Confidence;
+use Hopheartsceo\ReleaseGuard\Domain\Finding\Severity;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Hopheartsceo\ReleaseGuard\Infrastructure\Git\GitRepositoryService;
 use Hopheartsceo\ReleaseGuard\Source\BaseRevisionSourceProvider;
 use Hopheartsceo\ReleaseGuard\Source\CandidateSourceProvider;
@@ -221,29 +224,7 @@ PHP,
 
     public function test_real_eloquent_patterns_feed_compatibility_rules(): void
     {
-        $git = new GitRepositoryService(
-            $this->repository,
-        );
-
-        $pipeline = new ReleaseGuardAnalysisPipeline(
-            git: $git,
-            baseSources:
-                new BaseRevisionSourceProvider($git),
-            candidateSources:
-                new CandidateSourceProvider($git),
-            databaseUsageAnalyzer:
-                new DatabaseUsageAnalyzer(),
-            migrationAnalyzer:
-                new MigrationAnalyzer(),
-            compatibilityEngine:
-                new CompatibilityEngine([
-                    new DroppedColumnStillReferencedRule(),
-                    new DroppedTableStillReferencedRule(),
-                    new RequiredColumnBreaksBaseWritesRule(),
-                ]),
-        );
-
-        $result = $pipeline->analyzeAgainst('HEAD~1');
+        $result = $this->analyzeAgainstPreviousCommit();
 
         $actual = array_map(
             static fn ($finding): array => [
@@ -286,6 +267,234 @@ PHP,
             ],
             $actual,
         );
+    }
+
+    public function test_fresh_known_model_save_reaches_db005_as_warning_unknown(): void
+    {
+        $this->initializeFreshRepository(
+            serviceSource: <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+$user = new User([
+    'name' => $name,
+]);
+$user->email = $email;
+$user['timezone'] = 'UTC';
+$user->save();
+PHP,
+        );
+
+        $result = $this->analyzeAgainstPreviousCommit();
+
+        $this->assertCount(1, $result->findings);
+
+        $finding = $result->findings[0];
+
+        $this->assertSame('DB005', $finding->code);
+        $this->assertSame(Severity::WARNING, $finding->severity);
+        $this->assertSame(Confidence::UNKNOWN, $finding->confidence);
+        $this->assertSame('users', $finding->table);
+        $this->assertSame('country_code', $finding->column);
+        $this->assertSame('eloquent_fresh_save', $finding->usage?->operation);
+        $this->assertNull($finding->usage?->columns);
+        $this->assertSame(
+            'eloquent_fresh_save_semantics',
+            $finding->usage?->reason,
+        );
+    }
+
+    public function test_loaded_model_save_does_not_emit_fresh_save_db005(): void
+    {
+        $this->initializeFreshRepository(
+            serviceSource: <<<'PHP'
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+
+$user = User::findOrFail($id);
+$user->email = $email;
+$user->save();
+PHP,
+        );
+
+        $result = $this->analyzeAgainstPreviousCommit();
+
+        $this->assertSame([], $this->freshSaveDb005Findings($result->findings));
+    }
+
+    public function test_ambiguous_model_save_does_not_emit_fresh_save_db005(): void
+    {
+        $this->initializeFreshRepository(
+            serviceSource: <<<'PHP'
+<?php
+
+namespace App\Services;
+
+$user = makeUser();
+$user->save();
+PHP,
+        );
+
+        $result = $this->analyzeAgainstPreviousCommit();
+
+        $this->assertSame([], $this->freshSaveDb005Findings($result->findings));
+    }
+
+    #[DataProvider('eloquentCreateOperations')]
+    public function test_eloquent_create_family_remains_warning_unknown(
+        string $operation,
+    ): void {
+        $this->initializeFreshRepository(
+            serviceSource: <<<PHP
+<?php
+
+namespace App\Services;
+
+use App\\Models\\User;
+
+User::{$operation}([
+    'name' => \$name,
+    'email' => \$email,
+]);
+PHP,
+        );
+
+        $result = $this->analyzeAgainstPreviousCommit();
+
+        $this->assertCount(1, $result->findings);
+
+        $finding = $result->findings[0];
+
+        $this->assertSame('DB005', $finding->code);
+        $this->assertSame(Severity::WARNING, $finding->severity);
+        $this->assertSame(Confidence::UNKNOWN, $finding->confidence);
+        $this->assertSame('users', $finding->table);
+        $this->assertSame('country_code', $finding->column);
+        $this->assertSame($operation, $finding->usage?->operation);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function eloquentCreateOperations(): array
+    {
+        return [
+            'create' => ['create'],
+            'forceCreate' => ['forceCreate'],
+            'createQuietly' => ['createQuietly'],
+            'forceCreateQuietly' => ['forceCreateQuietly'],
+        ];
+    }
+
+    private function analyzeAgainstPreviousCommit(): object
+    {
+        $git = new GitRepositoryService(
+            $this->repository,
+        );
+
+        $pipeline = new ReleaseGuardAnalysisPipeline(
+            git: $git,
+            baseSources:
+                new BaseRevisionSourceProvider($git),
+            candidateSources:
+                new CandidateSourceProvider($git),
+            databaseUsageAnalyzer:
+                new DatabaseUsageAnalyzer(),
+            migrationAnalyzer:
+                new MigrationAnalyzer(),
+            compatibilityEngine:
+                new CompatibilityEngine([
+                    new DroppedColumnStillReferencedRule(),
+                    new DroppedTableStillReferencedRule(),
+                    new RequiredColumnBreaksBaseWritesRule(),
+                ]),
+        );
+
+        return $pipeline->analyzeAgainst('HEAD~1');
+    }
+
+    private function initializeFreshRepository(
+        string $serviceSource,
+    ): void {
+        $this->removeDirectory($this->repository);
+
+        foreach ([
+            'app/Models',
+            'app/Services',
+            'database/migrations',
+        ] as $directory) {
+            mkdir(
+                $this->repository.'/'.$directory,
+                0777,
+                true,
+            );
+        }
+
+        $this->git('init', '-q');
+
+        $this->write(
+            'app/Models/User.php',
+            <<<'PHP'
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+final class User extends Model
+{
+}
+PHP,
+        );
+
+        $this->write('app/Services/UserWriter.php', $serviceSource);
+
+        $this->git('add', '.');
+        $this->commit('Base release');
+
+        $this->write(
+            'database/migrations/2026_08_17_000001_add_country_code.php',
+            <<<'PHP'
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('users', function (Blueprint $table): void {
+            $table->string('country_code');
+        });
+    }
+};
+PHP,
+        );
+
+        $this->git('add', '.');
+        $this->commit('Candidate release');
+    }
+
+    /**
+     * @param list<object> $findings
+     * @return list<object>
+     */
+    private function freshSaveDb005Findings(array $findings): array
+    {
+        return array_values(array_filter(
+            $findings,
+            static fn (object $finding): bool =>
+                $finding->code === 'DB005'
+                && $finding->usage?->operation === 'eloquent_fresh_save',
+        ));
     }
 
     private function write(

@@ -96,19 +96,19 @@ description: "Task list for Eloquent Fresh Save DB005 Coverage"
 
 ### Integration Tests
 
-- [ ] T024 [US1] Add fresh-save plus required-added-column integration test in `tests/Integration/EloquentCompatibilityScenariosTest.php` (depends on T020 and T023); done when DB005 `WARNING` / `UNKNOWN` is asserted for a supported fresh-save path.
-- [ ] T025 [US1] Add fresh-save-only `AnalysisResult` non-blocker integration assertion in `tests/Integration/EloquentReleaseGuardAnalysisPipelineTest.php` (depends on T024); done when `hasDefiniteBlocker()` is false for fresh-save-only DB005 warnings.
-- [ ] T026 [US2] Add loaded-model `save()` integration regression in `tests/Integration/EloquentCompatibilityScenariosTest.php` (depends on T020 and T023); done when no fresh-save DB005 finding is produced for supported loaded retrieval paths.
-- [ ] T027 [US3] Add ambiguous-provenance `save()` integration regression in `tests/Integration/EloquentCompatibilityScenariosTest.php` (depends on T020 and T023); done when no fresh-save DB005 finding is produced for ambiguous or unsupported receiver provenance.
-- [ ] T028 [US1] Preserve existing Eloquent `create`, `forceCreate`, `createQuietly`, and `forceCreateQuietly` behavior in `tests/Integration/EloquentCompatibilityScenariosTest.php` (depends on T024); done when each remains DB005 `WARNING` / `UNKNOWN`.
-- [ ] T029 [US1] Preserve Query Builder `insert` and `insertGetId` classifications in `tests/Feature/RequiredColumnBreaksBaseWritesIntegrationTest.php` (depends on T023); done when known-column definite and unknown-payload uncertain classifications remain unchanged.
+- [X] T024 [US1] Add fresh-save plus required-added-column integration test in `tests/Integration/EloquentCompatibilityScenariosTest.php` (depends on T020 and T023); done when DB005 `WARNING` / `UNKNOWN` is asserted for a supported fresh-save path.
+- [X] T025 [US1] Add fresh-save-only `AnalysisResult` non-blocker integration assertion in `tests/Integration/EloquentReleaseGuardAnalysisPipelineTest.php` (depends on T024); done when `hasDefiniteBlocker()` is false for fresh-save-only DB005 warnings.
+- [X] T026 [US2] Add loaded-model `save()` integration regression in `tests/Integration/EloquentCompatibilityScenariosTest.php` (depends on T020 and T023); done when no fresh-save DB005 finding is produced for supported loaded retrieval paths.
+- [X] T027 [US3] Add ambiguous-provenance `save()` integration regression in `tests/Integration/EloquentCompatibilityScenariosTest.php` (depends on T020 and T023); done when no fresh-save DB005 finding is produced for ambiguous or unsupported receiver provenance.
+- [X] T028 [US1] Preserve existing Eloquent `create`, `forceCreate`, `createQuietly`, and `forceCreateQuietly` behavior in `tests/Integration/EloquentCompatibilityScenariosTest.php` (depends on T024); done when each remains DB005 `WARNING` / `UNKNOWN`.
+- [X] T029 [US1] Preserve Query Builder `insert` and `insertGetId` classifications in `tests/Feature/RequiredColumnBreaksBaseWritesIntegrationTest.php` (depends on T023); done when known-column definite and unknown-payload uncertain classifications remain unchanged.
 
 ### Public Contract Tests
 
-- [ ] T030 [US1] Add command exit-code regression for fresh-save-only DB005 warning in `tests/Feature/CheckReleaseCompatibilityCommandTest.php` (depends on T024-T025); done when command exit code is `0`.
-- [ ] T031 [US1] Add JSON contract regression for fresh-save DB005 output in `tests/Feature/CheckReleaseCompatibilityCommandTest.php` (depends on T030); done when the existing JSON envelope is unchanged and usage includes operation `eloquent_fresh_save`, `columns: null`, and reason `eloquent_fresh_save_semantics`.
-- [ ] T032 [US1] Add console contract regression for fresh-save DB005 output and exact success-message preservation in `tests/Feature/CheckReleaseCompatibilityCommandTest.php` (depends on T030); done when console shape remains compatible and `No incompatible changes detected within the analyzed scope.` is unchanged where applicable.
-- [ ] T033 [US3] Add configuration and rule-code vocabulary regression in `tests/Feature/CompatibilityEngineRegistrationTest.php` and `tests/Feature/CheckReleaseCompatibilityCommandTest.php` (depends on T030-T032); done when DB001-DB006 codes, severity/confidence names, and configuration behavior are unchanged.
+- [X] T030 [US1] Add command exit-code regression for fresh-save-only DB005 warning in `tests/Feature/CheckReleaseCompatibilityCommandTest.php` (depends on T024-T025); done when command exit code is `0`.
+- [X] T031 [US1] Add JSON contract regression for fresh-save DB005 output in `tests/Feature/CheckReleaseCompatibilityCommandTest.php` (depends on T030); done when the existing JSON envelope is unchanged, code remains DB005, severity remains WARNING, confidence remains UNKNOWN, usage.operation is `eloquent_fresh_save`, and the existing public usage shape remains unchanged with only its currently public fields such as file, line, and operation; do not add public `columns` or `reason` fields, because internal `columns: null` and reason `eloquent_fresh_save_semantics` are protected by lower-level tests rather than public JSON serialization.
+- [X] T032 [US1] Add console contract regression for fresh-save DB005 output and exact success-message preservation in `tests/Feature/CheckReleaseCompatibilityCommandTest.php` (depends on T030); done when console shape remains compatible and `No incompatible changes detected within the analyzed scope.` is unchanged where applicable.
+- [X] T033 [US3] Add configuration and rule-code vocabulary regression in `tests/Feature/CompatibilityEngineRegistrationTest.php` and `tests/Feature/CheckReleaseCompatibilityCommandTest.php` (depends on T030-T032); done when DB001-DB006 codes, severity/confidence names, and configuration behavior are unchanged.
 
 **Checkpoint**: End-to-end and public-contract behavior matches `contracts/public-analysis-contract.md`.
 

@@ -30,17 +30,16 @@ Fresh-instance Eloquent `save()` risk for DB005 must appear as an ordinary DB005
   "table": "users",
   "column": "country_code",
   "usage": {
-    "table": "users",
-    "operation": "eloquent_fresh_save",
-    "columns": null,
-    "reason": "eloquent_fresh_save_semantics",
     "file": "app/Services/UserCreator.php",
-    "line": 12
+    "line": 12,
+    "operation": "eloquent_fresh_save"
   }
 }
 ```
 
 The exact JSON envelope and console renderer shape remain the existing v0.1 contract. No new top-level JSON fields or finding codes are introduced.
+
+`WriteUsage` continues to carry richer internal evidence such as `table`, `columns`, and `reason`, including `columns: null` and `reason: eloquent_fresh_save_semantics` for supported fresh saves. Those internal fields are not added to the nested public JSON `usage` object in v0.2; the existing v0.1 JSON usage shape remains `file`, `line`, and `operation`, while finding-level `table` and `column` remain in their existing public locations.
 
 ## Compatibility Requirements
 
