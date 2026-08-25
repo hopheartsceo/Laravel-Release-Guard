@@ -12,12 +12,18 @@ use Hopheartsceo\ReleaseGuard\Domain\Application\ModelIndex;
 use Hopheartsceo\ReleaseGuard\Domain\Application\TableUsage;
 use Hopheartsceo\ReleaseGuard\Domain\Application\WriteUsage;
 use PhpParser\Node\ArrayItem;
+use PhpParser\Node;
 use PhpParser\Node\Expr\Array_;
+use PhpParser\Node\Expr\ArrayDimFetch;
+use PhpParser\Node\Expr\Assign;
+use PhpParser\Node\Expr\New_;
 use PhpParser\Node\Expr\MethodCall;
+use PhpParser\Node\Expr\PropertyFetch;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
 use PhpParser\Node\Scalar\String_;
+use PhpParser\Node\Stmt;
 use PhpParser\NodeFinder;
 
 final class EloquentUsageAnalyzer
@@ -105,6 +111,23 @@ final class EloquentUsageAnalyzer
     private const DIRECT_STATIC_MODEL_METHODS_TO_IGNORE = [
         'update',
         'delete',
+    ];
+
+    private const RECEIVER_STATE_FRESH = 'fresh';
+
+    private const RECEIVER_STATE_LOADED = 'loaded';
+
+    private const RECEIVER_STATE_AMBIGUOUS = 'ambiguous';
+
+    /**
+     * @var list<string>
+     */
+    private const LOADED_RETRIEVAL_METHODS = [
+        'find',
+        'findOrFail',
+        'first',
+        'firstOrFail',
+        'sole',
     ];
 
     /**
@@ -271,7 +294,266 @@ final class EloquentUsageAnalyzer
             }
         }
 
+        foreach (
+            $this->freshSaveUsagesFromOrderedReceiverEvents(
+                statements: $statements,
+                file: $file,
+                models: $models,
+            )
+            as $usage
+        ) {
+            $usages[] = $usage;
+        }
+
         return new ApplicationSnapshot($usages);
+    }
+
+    /**
+     * @param array<Node> $statements
+     * @return list<WriteUsage>
+     */
+    private function freshSaveUsagesFromOrderedReceiverEvents(
+        array $statements,
+        string $file,
+        ModelIndex $models,
+    ): array {
+        $usages = [];
+
+        foreach ($statements as $statement) {
+            if ($statement instanceof Stmt\Namespace_) {
+                foreach (
+                    $this->freshSaveUsagesFromOrderedReceiverEvents(
+                        statements: $statement->stmts,
+                        file: $file,
+                        models: $models,
+                    )
+                    as $usage
+                ) {
+                    $usages[] = $usage;
+                }
+
+                continue;
+            }
+
+            if ($statement instanceof Stmt\Class_) {
+                foreach ($statement->stmts as $classStatement) {
+                    if (
+                        ! $classStatement instanceof Stmt\ClassMethod
+                        || $classStatement->stmts === null
+                    ) {
+                        continue;
+                    }
+
+                    foreach (
+                        $this->freshSaveUsagesFromOrderedReceiverEvents(
+                            statements: $classStatement->stmts,
+                            file: $file,
+                            models: $models,
+                        )
+                        as $usage
+                    ) {
+                        $usages[] = $usage;
+                    }
+                }
+
+                continue;
+            }
+
+            if (
+                $statement instanceof Stmt\Function_
+                && $statement->stmts !== []
+            ) {
+                foreach (
+                    $this->freshSaveUsagesFromOrderedReceiverEvents(
+                        statements: $statement->stmts,
+                        file: $file,
+                        models: $models,
+                    )
+                    as $usage
+                ) {
+                    $usages[] = $usage;
+                }
+            }
+        }
+
+        return [
+            ...$usages,
+            ...$this->freshSaveUsagesFromStraightLineStatements(
+                statements: $statements,
+                file: $file,
+                models: $models,
+            ),
+        ];
+    }
+
+    /**
+     * @param array<Node> $statements
+     * @return list<WriteUsage>
+     */
+    private function freshSaveUsagesFromStraightLineStatements(
+        array $statements,
+        string $file,
+        ModelIndex $models,
+    ): array {
+        $states = [];
+        $usages = [];
+
+        foreach ($statements as $statement) {
+            if ($statement instanceof Stmt\Expression) {
+                foreach (
+                    $this->processReceiverExpression(
+                        expression: $statement->expr,
+                        states: $states,
+                        file: $file,
+                        models: $models,
+                    )
+                    as $usage
+                ) {
+                    $usages[] = $usage;
+                }
+
+                continue;
+            }
+
+            foreach (
+                $this->assignedLocalVariablesInUnsupportedBoundary(
+                    $statement,
+                )
+                as $receiver
+            ) {
+                $states[$receiver] = [
+                    'state' => self::RECEIVER_STATE_AMBIGUOUS,
+                    'table' => null,
+                ];
+            }
+        }
+
+        return $usages;
+    }
+
+    /**
+     * @param array<string, array{state: string, table: ?string}> $states
+     * @return list<WriteUsage>
+     */
+    private function processReceiverExpression(
+        Node\Expr $expression,
+        array &$states,
+        string $file,
+        ModelIndex $models,
+    ): array {
+        if ($expression instanceof Assign) {
+            $receiver = $this->localReceiverName(
+                $expression->var,
+            );
+
+            if ($receiver !== null) {
+                $freshModel = $this->modelForSupportedFreshNew(
+                    $expression->expr,
+                    $models,
+                );
+
+                if (
+                    $freshModel !== null
+                    && $freshModel->hasKnownTable()
+                ) {
+                    $states[$receiver] = [
+                        'state' => self::RECEIVER_STATE_FRESH,
+                        'table' => $freshModel->table,
+                    ];
+
+                    return [];
+                }
+
+                $loadedModel = $this->modelForSupportedLoadedOrigin(
+                    $expression->expr,
+                    $models,
+                );
+
+                if (
+                    $loadedModel !== null
+                    && $loadedModel->hasKnownTable()
+                ) {
+                    $states[$receiver] = [
+                        'state' => self::RECEIVER_STATE_LOADED,
+                        'table' => $loadedModel->table,
+                    ];
+
+                    return [];
+                }
+
+                $states[$receiver] = [
+                    'state' => self::RECEIVER_STATE_AMBIGUOUS,
+                    'table' => null,
+                ];
+
+                return [];
+            }
+
+            $assignedReceiver = $this->supportedSameReceiverAttributeWrite(
+                $expression->var,
+            );
+
+            if (
+                $assignedReceiver !== null
+                && isset($states[$assignedReceiver])
+                && in_array(
+                    $states[$assignedReceiver]['state'],
+                    [
+                        self::RECEIVER_STATE_FRESH,
+                        self::RECEIVER_STATE_LOADED,
+                    ],
+                    true,
+                )
+            ) {
+                return [];
+            }
+
+            return [];
+        }
+
+        if ($expression instanceof MethodCall) {
+            $receiver = $this->localReceiverName(
+                $expression->var,
+            );
+
+            if ($receiver === null) {
+                return [];
+            }
+
+            $method = $this->methodName($expression);
+
+            if ($method === 'save') {
+                $state = $states[$receiver] ?? null;
+
+                if (
+                    $state !== null
+                    && $state['state'] === self::RECEIVER_STATE_FRESH
+                    && $state['table'] !== null
+                ) {
+                    return [
+                        new WriteUsage(
+                            table: $state['table'],
+                            operation: 'eloquent_fresh_save',
+                            columns: null,
+                            reason: 'eloquent_fresh_save_semantics',
+                            file: $file,
+                            line: $expression->getStartLine(),
+                        ),
+                    ];
+                }
+
+                return [];
+            }
+
+            if (isset($states[$receiver])) {
+                $states[$receiver] = [
+                    'state' => self::RECEIVER_STATE_AMBIGUOUS,
+                    'table' => null,
+                ];
+            }
+        }
+
+        return [];
     }
 
     /**
@@ -798,6 +1080,185 @@ final class EloquentUsageAnalyzer
             $current,
             $models,
         );
+    }
+
+    private function modelForSupportedFreshNew(
+        Node\Expr $expression,
+        ModelIndex $models,
+    ): ?ModelDescriptor {
+        if (
+            ! $expression instanceof New_
+            || ! $expression->class instanceof Name
+            || count($expression->args) > 1
+        ) {
+            return null;
+        }
+
+        if (isset($expression->args[0])) {
+            $payload = $expression->args[0]->value;
+
+            if (
+                ! $payload instanceof Array_
+                || $this->literalWriteColumns($payload) === null
+            ) {
+                return null;
+            }
+        }
+
+        return $models->find(
+            $expression->class->toString(),
+        );
+    }
+
+    private function modelForSupportedLoadedOrigin(
+        Node\Expr $expression,
+        ModelIndex $models,
+    ): ?ModelDescriptor {
+        if ($expression instanceof StaticCall) {
+            $method = $this->staticMethodName(
+                $expression,
+            );
+
+            if (
+                $method === null
+                || ! in_array(
+                    $method,
+                    self::LOADED_RETRIEVAL_METHODS,
+                    true,
+                )
+            ) {
+                return null;
+            }
+
+            return $this->modelForStaticCall(
+                $expression,
+                $models,
+            );
+        }
+
+        if (! $expression instanceof MethodCall) {
+            return null;
+        }
+
+        $method = $this->methodName(
+            $expression,
+        );
+
+        if (
+            $method === null
+            || ! in_array(
+                $method,
+                self::LOADED_RETRIEVAL_METHODS,
+                true,
+            )
+        ) {
+            return null;
+        }
+
+        $root = $this->rootStaticCallForMethodChain(
+            $expression,
+        );
+
+        if (
+            $root === null
+            || $this->staticMethodName($root) !== 'query'
+        ) {
+            return null;
+        }
+
+        return $this->modelForStaticCall(
+            $root,
+            $models,
+        );
+    }
+
+    private function rootStaticCallForMethodChain(
+        MethodCall $call,
+    ): ?StaticCall {
+        $current = $call->var;
+
+        while ($current instanceof MethodCall) {
+            $current = $current->var;
+        }
+
+        if (! $current instanceof StaticCall) {
+            return null;
+        }
+
+        return $current;
+    }
+
+    private function localReceiverName(
+        Node\Expr $expression,
+    ): ?string {
+        if (
+            ! $expression instanceof Node\Expr\Variable
+            || ! is_string($expression->name)
+        ) {
+            return null;
+        }
+
+        return $expression->name;
+    }
+
+    private function supportedSameReceiverAttributeWrite(
+        Node\Expr $expression,
+    ): ?string {
+        if ($expression instanceof PropertyFetch) {
+            if (! $expression->name instanceof Identifier) {
+                return null;
+            }
+
+            return $this->localReceiverName(
+                $expression->var,
+            );
+        }
+
+        if (
+            $expression instanceof ArrayDimFetch
+            && $expression->dim instanceof String_
+        ) {
+            return $this->localReceiverName(
+                $expression->var,
+            );
+        }
+
+        return null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function assignedLocalVariablesInUnsupportedBoundary(
+        Node $node,
+    ): array {
+        if (
+            $node instanceof Stmt\Namespace_
+            || $node instanceof Stmt\Class_
+            || $node instanceof Stmt\Function_
+        ) {
+            return [];
+        }
+
+        $receivers = [];
+
+        foreach (
+            $this->finder->findInstanceOf(
+                [$node],
+                Assign::class,
+            )
+            as $assignment
+        ) {
+            $receiver = $this->localReceiverName(
+                $assignment->var,
+            );
+
+            if ($receiver !== null) {
+                $receivers[] = $receiver;
+            }
+        }
+
+        return array_values(array_unique($receivers));
     }
 
     private function isSupportedQueryRootStaticCall(

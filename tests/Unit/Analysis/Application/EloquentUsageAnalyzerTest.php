@@ -399,7 +399,7 @@ PHP;
         $freshSaveUsages = $this->freshSaveUsages($this->analyze($source));
 
         $this->assertCount(1, $freshSaveUsages);
-        $this->assertFreshSaveUsage($freshSaveUsages[0]);
+        $this->assertFreshSaveUsage($freshSaveUsages[0], line: 8);
     }
 
     public function test_literal_constructor_attributes_then_save_emit_unknown_column_fresh_save_usage(): void
@@ -422,7 +422,7 @@ PHP;
         $freshSaveUsages = $this->freshSaveUsages($this->analyze($source));
 
         $this->assertCount(1, $freshSaveUsages);
-        $this->assertFreshSaveUsage($freshSaveUsages[0]);
+        $this->assertFreshSaveUsage($freshSaveUsages[0], line: 12);
         $this->assertNull($freshSaveUsages[0]->columns);
         $this->assertSame(
             'eloquent_fresh_save_semantics',
@@ -447,7 +447,7 @@ PHP;
         $freshSaveUsages = $this->freshSaveUsages($this->analyze($source));
 
         $this->assertCount(1, $freshSaveUsages);
-        $this->assertFreshSaveUsage($freshSaveUsages[0]);
+        $this->assertFreshSaveUsage($freshSaveUsages[0], line: 9);
     }
 
     public function test_empty_constructor_attribute_array_assignment_then_save_emits_fresh_save_usage(): void
@@ -467,7 +467,7 @@ PHP;
         $freshSaveUsages = $this->freshSaveUsages($this->analyze($source));
 
         $this->assertCount(1, $freshSaveUsages);
-        $this->assertFreshSaveUsage($freshSaveUsages[0]);
+        $this->assertFreshSaveUsage($freshSaveUsages[0], line: 9);
     }
 
     public function test_constructor_payload_plus_supported_assignments_then_save_emits_exact_fresh_save_usage(): void
@@ -491,7 +491,7 @@ PHP;
         $freshSaveUsages = $this->freshSaveUsages($this->analyze($source));
 
         $this->assertCount(1, $freshSaveUsages);
-        $this->assertFreshSaveUsage($freshSaveUsages[0]);
+        $this->assertFreshSaveUsage($freshSaveUsages[0], line: 13);
     }
 
     public function test_fresh_construction_then_unsupported_reassignment_has_no_fresh_save_usage(): void
@@ -631,7 +631,7 @@ PHP;
         $freshSaveUsages = $this->freshSaveUsages($this->analyze($source));
 
         $this->assertCount(1, $freshSaveUsages);
-        $this->assertFreshSaveUsage($freshSaveUsages[0], line: 18);
+        $this->assertFreshSaveUsage($freshSaveUsages[0], line: 16);
         $this->assertSame('app/Services/UserService.php', $freshSaveUsages[0]->file);
     }
 
